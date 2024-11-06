@@ -5,7 +5,7 @@ a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
-    datas=[('ffmpeg.exe', '.'), ('llama', 'llama'), ('whisper', 'whisper'), ('whisper', 'whisper')],
+    datas=[('ffmpeg.exe', '.'), ('llama', 'llama'), ('whisper', 'whisper'), ('project', 'project')],
     hiddenimports=['tiktoken_ext.openai_public', 'tiktoken_ext'],
     hookspath=[],
     hooksconfig={},
