@@ -341,7 +341,7 @@ class MainWorker(QObject):
         import os
         os.makedirs('project/cache', exist_ok=True)
 
-        for input_file in input_files:
+        for idx, input_file in enumerate(input_files):
             if not os.path.exists(input_file):
                 if 'youtu.be' in input_file or 'youtube.com' in input_file:
                     from yt_dlp import YoutubeDL
@@ -383,7 +383,7 @@ class MainWorker(QObject):
                     os.remove(os.path.join('project/cache', os.path.basename(input_file)))
                 input_file = shutil.move(input_file, 'project/cache/')
 
-            self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{input_files.index(input_file)+1}个，共{len(input_files)}个")
+            self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(input_files)}个")
 
             from prompt2srt import make_srt, make_lrc
             from srt2prompt import make_prompt
