@@ -83,15 +83,8 @@ class MainWindow(QMainWindow):
         self.about_layout.addWidget(TitleLabel("📖 关于"))
         self.introduce_text = QTextEdit()
         self.introduce_text.setReadOnly(True)
-        self.introduce_text.setPlainText("GalTransl是一套将数个基础功能上的微小创新与对GPT提示工程（Prompt Engineering）的深度利用相结合的Galgame自动化翻译工具，用于制作内嵌式翻译补丁。 GalTransl for ASMR是GalTransl的一个分支，您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。项目地址: https://github.com/shinnpuru/GalTransl-for-ASMR。")
+        self.introduce_text.setPlainText("GalTransl是一套将数个基础功能上的微小创新与对GPT提示工程（Prompt Engineering）的深度利用相结合的Galgame自动化翻译工具，用于制作内嵌式翻译补丁。 GalTransl for ASMR是GalTransl的一个分支，您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。项目地址及使用说明: https://github.com/shinnpuru/GalTransl-for-ASMR。")
         self.about_layout.addWidget(self.introduce_text)
-
-        # characteristic
-        self.about_layout.addWidget(TitleLabel("🎨 特点"))
-        self.characteristic_text = QTextEdit()
-        self.characteristic_text.setReadOnly(True)
-        self.characteristic_text.setPlainText("🔥 一键翻译：支持从YouTube/Bilibili直接下载视频。支持文件和链接批量处理，自动识别文件类型。\n🚀 高效翻译：支持AMD/NVIDIA/Intel GPU加速（Vulkan），翻译引擎支持调整显存占用。支持多种翻译模型，包括在线模型（GPT3.5、GPT4、Moonshot、Minimax、Qwen、GLM）和本地模型（Sakura、Index、Galtransl）等。\n📚 智能翻译：支持多种输入格式，包括音频、视频、SRT字幕。支持多种输出格式，包括SRT字幕、LRC字幕。支持字典功能，可以自定义翻译字典，替换输入输出。")
-        self.about_layout.addWidget(self.characteristic_text)
 
         # disclaimer
         self.about_layout.addWidget(TitleLabel("⚠️ 免责声明"))
@@ -174,7 +167,7 @@ class MainWindow(QMainWindow):
         self.settings_layout.addWidget(SubtitleLabel("🗣️ 语音识别AI模型"))
         self.settings_layout.addWidget(BodyLabel("选择用于语音识别的 Whisper 模型文件。"))
         self.whisper_file = QComboBox()
-        whisper_lst = [i for i in os.listdir('whisper') if i.startswith('ggml') and i.endswith('bin')]
+        whisper_lst = [i for i in os.listdir('whisper') if i.startswith('ggml') and i.endswith('bin')] + [i for i in os.listdir('whisper-faster') if i.startswith('faster-whisper')]
         self.whisper_file.addItems(whisper_lst)
         self.settings_layout.addWidget(self.whisper_file)
         
@@ -402,10 +395,18 @@ class MainWorker(QObject):
                 import subprocess
                 self.pid = subprocess.Popen(['ffmpeg.exe', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'], stdout=self.log, stderr=self.log)
                 self.pid.wait()
+                self.pid.kill()
+                self.pid.terminate()
 
                 self.status.emit("[INFO] 正在进行语音识别...")
-                self.pid = subprocess.Popen(['whisper/main.exe', '-m', 'whisper/'+whisper_file, '-osrt', '-l', 'ja', input_file+'.wav', '-of', input_file], stdout=self.log, stderr=self.log)
+
+                if whisper_file.startswith('ggml'):
+                    self.pid = subprocess.Popen(['whisper/main.exe', '-m', 'whisper/'+whisper_file, '-osrt', '-l', 'ja', input_file+'.wav', '-of', input_file], stdout=self.log, stderr=self.log)
+                else:
+                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', 'ja', '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav'], stdout=self.log, stderr=self.log)
                 self.pid.wait()
+                self.pid.kill()
+                self.pid.terminate()
 
                 output_file_path = os.path.join('project/gt_input', os.path.basename(input_file)+'.json')
                 make_prompt(input_file+'.srt', output_file_path)

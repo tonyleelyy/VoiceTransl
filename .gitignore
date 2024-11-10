@@ -14,3 +14,5 @@ python_embeded/
 faster-whisper*/
 build/
 dist/
+*.dll
+whisper-faster/whisper-faster.exe
