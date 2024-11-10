@@ -53,6 +53,7 @@ class MainWindow(QMainWindow):
         self.initSettingsTab()
         self.initDictTab()
         self.initOutputTab()
+        self.initAboutTab()
 
         # load config
         if os.path.exists('config.txt'):
@@ -61,16 +62,45 @@ class MainWindow(QMainWindow):
                 whisper_file = lines[0].strip()
                 translator = lines[1].strip()
                 gpt_token = lines[2].strip()
-                sakura_file = lines[3].strip()
-                sakura_mode = int(lines[4].strip())
-                proxy_address = lines[5].strip()
+                gpt_address = lines[3].strip()
+                sakura_file = lines[4].strip()
+                sakura_mode = int(lines[5].strip())
+                proxy_address = lines[6].strip()
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
                 self.gpt_token.setText(gpt_token)
+                self.gpt_address.setText(gpt_address)
                 self.sakura_file.setCurrentText(sakura_file)
                 self.sakura_mode.setValue(sakura_mode)
                 self.proxy_address.setText(proxy_address)
+
+    def initAboutTab(self):
+        self.about_tab = Widget("About", self)
+        self.about_layout = self.about_tab.vBoxLayout
+
+        # introduce
+        self.about_layout.addWidget(TitleLabel("📖 关于"))
+        self.introduce_text = QTextEdit()
+        self.introduce_text.setReadOnly(True)
+        self.introduce_text.setPlainText("GalTransl是一套将数个基础功能上的微小创新与对GPT提示工程（Prompt Engineering）的深度利用相结合的Galgame自动化翻译工具，用于制作内嵌式翻译补丁。 GalTransl for ASMR是GalTransl的一个分支，您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。项目地址: https://github.com/shinnpuru/GalTransl-for-ASMR。")
+        self.about_layout.addWidget(self.introduce_text)
+
+        # characteristic
+        self.about_layout.addWidget(TitleLabel("🎨 特点"))
+        self.characteristic_text = QTextEdit()
+        self.characteristic_text.setReadOnly(True)
+        self.characteristic_text.setPlainText("🔥 一键翻译：支持从YouTube/Bilibili直接下载视频。支持文件和链接批量处理，自动识别文件类型。\n🚀 高效翻译：支持AMD/NVIDIA/Intel GPU加速（Vulkan），翻译引擎支持调整显存占用。支持多种翻译模型，包括在线模型（GPT3.5、GPT4、Moonshot、Minimax、Qwen、GLM）和本地模型（Sakura、Index、Galtransl）等。\n📚 智能翻译：支持多种输入格式，包括音频、视频、SRT字幕。支持多种输出格式，包括SRT字幕、LRC字幕。支持字典功能，可以自定义翻译字典，替换输入输出。")
+        self.about_layout.addWidget(self.characteristic_text)
+
+        # disclaimer
+        self.about_layout.addWidget(TitleLabel("⚠️ 免责声明"))
+        self.disclaimer_text = QTextEdit()
+        self.disclaimer_text.setReadOnly(True)
+        self.disclaimer_text.setPlainText("本程序仅供学习交流使用，不得用于商业用途。请遵守当地法律法规，不得传播色情、暴力、恐怖等违法违规内容。本软件不对任何使用者的行为负责，不保证翻译结果的准确性。使用本软件即代表您同意自行承担使用本软件的风险，包括但不限于版权风险、法律风险等。")
+        self.about_layout.addWidget(self.disclaimer_text)
+
+        self.addSubInterface(self.about_tab, FluentIcon.INFO, "关于", NavigationItemPosition.TOP)
         
     def initInputOutputTab(self):
         self.input_output_tab = Widget("Home", self)
@@ -159,6 +189,11 @@ class MainWindow(QMainWindow):
         self.gpt_token = QLineEdit()
         self.gpt_token.setPlaceholderText("留空为使用上次配置的Token。")
         self.settings_layout.addWidget(self.gpt_token)
+
+        self.settings_layout.addWidget(SubtitleLabel("🌌 自定义OpenAI地址"))
+        self.gpt_address = QLineEdit()
+        self.gpt_address.setPlaceholderText("例如：https://api.openai.com")
+        self.settings_layout.addWidget(self.gpt_address)
         
         self.settings_layout.addWidget(BodyLabel("📦 离线模型文件"))
         self.sakura_file = QComboBox()
@@ -258,6 +293,7 @@ class MainWorker(QObject):
         whisper_file = self.master.whisper_file.currentText()
         translator = self.master.translator_group.currentText()
         gpt_token = self.master.gpt_token.text()
+        gpt_address = self.master.gpt_address.text()
         sakura_file = self.master.sakura_file.currentText()
         sakura_mode = self.master.sakura_mode.value()
         proxy_address = self.master.proxy_address.text()
@@ -267,7 +303,7 @@ class MainWorker(QObject):
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{gpt_token}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n")
+            f.write(f"{whisper_file}\n{translator}\n{gpt_token}\n{gpt_address}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n")
 
         self.status.emit("[INFO] 正在初始化项目文件夹...")
 
@@ -385,12 +421,15 @@ class MainWorker(QObject):
 
             for idx, line in enumerate(lines):
                 if 'gpt' in translator and gpt_token:
+                    if not gpt_address:
+                        gpt_address = 'https://api.openai.com'
                     if 'GPT35:' in line:
                         lines[idx+2] = f"      - token: {gpt_token}\n"
-                        lines[idx+6] = f"    defaultEndpoint: https://api.openai.com\n"
+                        lines[idx+6] = f"    defaultEndpoint: {gpt_address}\n"
                         lines[idx+7] = f'    rewriteModelName: ""\n'
                     if 'GPT4: # GPT4 API' in line:
                         lines[idx+2] = f"      - token: {gpt_token}\n"
+                        lines[idx+4] = f"    defaultEndpoint: {gpt_address}\n"
                 if 'moonshot' in translator and gpt_token:
                     if 'GPT35:' in line:
                         lines[idx+4] = f"      - token: {gpt_token}\n"
