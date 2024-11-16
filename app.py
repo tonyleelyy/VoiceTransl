@@ -121,11 +121,6 @@ class MainWindow(QMainWindow):
         self.yt_url.setPlaceholderText("例如：https://www.youtube.com/watch?v=...\n例如：BV1Lxt5e8EJF")
         self.input_output_layout.addWidget(self.yt_url)
         
-        # Run Button
-        self.run_button = QPushButton("🚀 运行（状态详情请见输出界面）")
-        self.run_button.clicked.connect(self.run_worker)
-        self.input_output_layout.addWidget(self.run_button)
-        
         self.addSubInterface(self.input_output_tab, FluentIcon.HOME, "主页", NavigationItemPosition.TOP)
 
     def initDictTab(self):
@@ -217,8 +212,12 @@ class MainWindow(QMainWindow):
         self.status.connect(self.output_text_edit.append)
         self.output_layout.addWidget(self.output_text_edit)
 
-        self.open_log_button = QPushButton("📤 详细日志")
-        self.open_log_button.clicked.connect(lambda: os.startfile('log.txt'))
+        self.run_button = QPushButton("🚀 运行")
+        self.run_button.clicked.connect(self.run_worker)
+        self.output_layout.addWidget(self.run_button)
+
+        self.open_log_button = QPushButton("📤 系统日志")
+        self.open_log_button.clicked.connect(lambda: os.startfile('log.txt') if os.path.exists('log.txt') else None)
         self.output_layout.addWidget(self.open_log_button)
 
         self.open_output_button = QPushButton("📁 打开下载文件夹")
@@ -275,9 +274,6 @@ class MainWorker(QObject):
         super().__init__()
         self.master = master
         self.status = master.status
-        self.log = open('log.txt', 'w', encoding='utf-8')
-        sys.stdout = self.log
-        sys.stderr = self.log
 
     def run(self):
         self.status.emit("[INFO] 正在读取配置...")
@@ -393,7 +389,7 @@ class MainWorker(QObject):
 
                 self.status.emit("[INFO] 正在进行音频提取...")
                 import subprocess
-                self.pid = subprocess.Popen(['ffmpeg.exe', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'], stdout=self.log, stderr=self.log)
+                self.pid = subprocess.Popen(['ffmpeg.exe', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'])
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
@@ -401,9 +397,9 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 正在进行语音识别...")
 
                 if whisper_file.startswith('ggml'):
-                    self.pid = subprocess.Popen(['whisper/main.exe', '-m', 'whisper/'+whisper_file, '-osrt', '-l', 'ja', input_file+'.wav', '-of', input_file], stdout=self.log, stderr=self.log)
+                    self.pid = subprocess.Popen(['whisper/main.exe', '-m', 'whisper/'+whisper_file, '-osrt', '-l', 'ja', input_file+'.wav', '-of', input_file])
                 else:
-                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', 'ja', '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav'], stdout=self.log, stderr=self.log)
+                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', 'ja', '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav'])
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
@@ -479,7 +475,7 @@ class MainWorker(QObject):
                     continue
 
                 import subprocess
-                self.pid = subprocess.Popen(['llama/server.exe', '-m', 'llama/'+sakura_file, '-c', '2048', '-ngl' , str(sakura_mode), '--host', '127.0.0.1', '--port', '8989'], stdout=self.log, stderr=self.log)
+                self.pid = subprocess.Popen(['llama/server.exe', '-m', 'llama/'+sakura_file, '-c', '2048', '-ngl' , str(sakura_mode), '--host', '127.0.0.1', '--port', '8989'])
 
             self.status.emit("[INFO] 正在进行翻译...")
             from GalTransl.__main__ import worker
@@ -498,6 +494,10 @@ class MainWorker(QObject):
         self.finished.emit()
 
 if __name__ == "__main__":
+    log = open('log.txt', 'w', encoding='utf-8')
+    sys.stdout = log
+    sys.stderr = log
+
     app = QApplication(sys.argv)
     main_window = MainWindow()
     main_window.show()
