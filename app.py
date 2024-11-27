@@ -330,6 +330,61 @@ class MainWorker(QObject):
         import os
         os.makedirs('project/cache', exist_ok=True)
 
+        self.status.emit("[INFO] 正在进行翻译配置...")
+        with open('project/config.yaml', 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        for idx, line in enumerate(lines):
+            if 'gpt' in translator and gpt_token:
+                if not gpt_address:
+                    gpt_address = 'https://api.openai.com'
+                if 'GPT35:' in line:
+                    lines[idx+2] = f"      - token: {gpt_token}\n"
+                    lines[idx+6] = f"    defaultEndpoint: {gpt_address}\n"
+                    lines[idx+7] = f'    rewriteModelName: ""\n'
+                if 'GPT4: # GPT4 API' in line:
+                    lines[idx+2] = f"      - token: {gpt_token}\n"
+                    lines[idx+4] = f"    defaultEndpoint: {gpt_address}\n"
+            if 'moonshot' in translator and gpt_token:
+                if 'GPT35:' in line:
+                    lines[idx+4] = f"      - token: {gpt_token}\n"
+                    lines[idx+6] = f"    defaultEndpoint: https://api.moonshot.cn\n"
+                    lines[idx+7] = f'    rewriteModelName: "moonshot-v1-8k"\n'
+            if 'qwen' in translator and gpt_token:
+                if 'GPT35:' in line:
+                    lines[idx+4] = f"      - token: {gpt_token}\n"
+                    lines[idx+6] = f"    defaultEndpoint: https://dashscope.aliyuncs.com/compatible-mode\n"
+                    lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
+            if 'glm' in translator and gpt_token:
+                if 'GPT35:' in line:
+                    lines[idx+4] = f"      - token: {gpt_token}\n"
+                    lines[idx+6] = f"    defaultEndpoint: https://open.bigmodel.cn/api/paas\n"
+                    lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
+            if 'abab' in translator and gpt_token:
+                if 'GPT35:' in line:
+                    lines[idx+4] = f"      - token: {gpt_token}\n"
+                    lines[idx+6] = f"    defaultEndpoint: https://api.minimax.chat\n"
+                    lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
+            if proxy_address:
+                if 'proxy' in line:
+                    lines[idx+1] = f"  enableProxy: true\n"
+                    lines[idx+3] = f"    - address: {proxy_address}\n"
+            else:
+                if 'proxy' in line:
+                    lines[idx+1] = f"  enableProxy: false\n"
+
+        if 'moonshot' in translator or 'qwen' in translator or 'glm' in translator or 'abab' in translator:
+            translator = 'gpt35-0613'
+        
+        if 'index' in translator:
+            translator = 'sakura-009'
+
+        if 'Galtransl' in translator:
+            translator = 'sakura-010'
+
+        with open('project/config.yaml', 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
         for idx, input_file in enumerate(input_files):
             if not os.path.exists(input_file):
                 if 'youtu.be' in input_file or 'youtube.com' in input_file:
@@ -411,62 +466,6 @@ class MainWorker(QObject):
             if translator == '不进行翻译':
                 self.status.emit("[INFO] 翻译器未选择，跳过翻译步骤...")
                 continue
-
-            self.status.emit("[INFO] 正在进行翻译配置...")
-            with open('project/config.yaml', 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-
-            for idx, line in enumerate(lines):
-                if 'gpt' in translator and gpt_token:
-                    if not gpt_address:
-                        gpt_address = 'https://api.openai.com'
-                    if 'GPT35:' in line:
-                        lines[idx+2] = f"      - token: {gpt_token}\n"
-                        lines[idx+6] = f"    defaultEndpoint: {gpt_address}\n"
-                        lines[idx+7] = f'    rewriteModelName: ""\n'
-                    if 'GPT4: # GPT4 API' in line:
-                        lines[idx+2] = f"      - token: {gpt_token}\n"
-                        lines[idx+4] = f"    defaultEndpoint: {gpt_address}\n"
-                if 'moonshot' in translator and gpt_token:
-                    if 'GPT35:' in line:
-                        lines[idx+4] = f"      - token: {gpt_token}\n"
-                        lines[idx+6] = f"    defaultEndpoint: https://api.moonshot.cn\n"
-                        lines[idx+7] = f'    rewriteModelName: "moonshot-v1-8k"\n'
-                if 'qwen' in translator and gpt_token:
-                    if 'GPT35:' in line:
-                        lines[idx+4] = f"      - token: {gpt_token}\n"
-                        lines[idx+6] = f"    defaultEndpoint: https://dashscope.aliyuncs.com/compatible-mode\n"
-                        lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
-                if 'glm' in translator and gpt_token:
-                    if 'GPT35:' in line:
-                        lines[idx+4] = f"      - token: {gpt_token}\n"
-                        lines[idx+6] = f"    defaultEndpoint: https://open.bigmodel.cn/api/paas\n"
-                        lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
-                if 'abab' in translator and gpt_token:
-                    if 'GPT35:' in line:
-                        lines[idx+4] = f"      - token: {gpt_token}\n"
-                        lines[idx+6] = f"    defaultEndpoint: https://api.minimax.chat\n"
-                        lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
-                if proxy_address:
-                    if 'proxy' in line:
-                        lines[idx+1] = f"  enableProxy: true\n"
-                        lines[idx+3] = f"    - address: {proxy_address}\n"
-                else:
-                    if 'proxy' in line:
-                        lines[idx+1] = f"  enableProxy: false\n"
-
-            if 'moonshot' in translator or 'qwen' in translator or 'glm' in translator or 'abab' in translator:
-                translator = 'gpt35-0613'
-            
-            if 'index' in translator:
-                translator = 'sakura-009'
-
-            if 'Galtransl' in translator:
-                translator = 'sakura-010'
-
-            with open('project/config.yaml', 'w', encoding='utf-8') as f:
-                f.writelines(lines)
-
 
             if 'sakura' in translator:
                 self.status.emit("[INFO] 正在启动Sakura翻译器...")
