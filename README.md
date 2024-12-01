@@ -1,10 +1,10 @@
 
 <div align=center><img src="title.jpg" alt="title" style="width:512px;"/></div>
-
-<h1><p align='center' >GalTransl for ASMR</p></h1>
 <div align=center><img src="https://img.shields.io/github/v/release/shinnpuru/GalTransl-for-ASMR"/>   <img src="https://img.shields.io/github/license/shinnpuru/GalTransl-for-ASMR"/>   <img src="https://img.shields.io/github/stars/shinnpuru/GalTransl-for-ASMR"/></div>
 
-GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。
+<h1><p align='center' >GalTransl for ASMR</p></h1>
+
+GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。详细说明请见 [视频教程](https://www.bilibili.com/video/BV1ZoUYYXEio)。
 
 ## 特色
 
