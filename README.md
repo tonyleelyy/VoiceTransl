@@ -2,10 +2,9 @@
 <div align=center><img src="title.jpg" alt="title" style="width:512px;"/></div>
 
 <h1><p align='center' >GalTransl for ASMR</p></h1>
-<div align=center><img src="https://img.shields.io/github/v/release/XD2333/GalTransl"/>   <img src="https://img.shields.io/github/license/XD2333/GalTransl"/>   <img src="https://img.shields.io/github/stars/XD2333/GalTransl"/></div>
-<p align='center' >支持GPT3.5/4/Newbing等大语言模型的ASMR自动化翻译解决方案</p>
-  
-  GalTransl是一套将数个基础功能上的微小创新与对GPT提示工程（Prompt Engineering）的深度利用相结合的Galgame自动化翻译工具，用于制作内嵌式翻译补丁。 GalTransl for ASMR是GalTransl的一个分支，您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。
+<div align=center><img src="https://img.shields.io/github/v/release/shinnpuru/GalTransl-for-ASMR"/>   <img src="https://img.shields.io/github/license/shinnpuru/GalTransl-for-ASMR"/>   <img src="https://img.shields.io/github/stars/shinnpuru/GalTransl-for-ASMR"/></div>
+
+GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。
 
 ## 特色
 
@@ -55,9 +54,9 @@
 
 ## 常见问题
 
-1. 502 Bad Gateway
+1. All connection attempts failed
 
-在线模型请检查网络连接是否正常，或者尝试更换代理。离线模型请检查8989端口是否被占用，并且关闭代理。
+在线模型请检查网络连接是否正常，或者尝试更换代理。离线模型出现连接错误，先检查是否超显存，把离线参数从0开始逐步增加10；然后确认关闭所有的代理软件，在系统设置-网络和Internet-代理里面应该是空的。
 
 2. 输出日志乱码
 
