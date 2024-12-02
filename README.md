@@ -1,10 +1,10 @@
 
-<div align=center><img src="title.jpg" alt="title" style="width:512px;"/></div>
+<h1><p align='center' >GalTransl for ASMR</p></h1>
 <div align=center><img src="https://img.shields.io/github/v/release/shinnpuru/GalTransl-for-ASMR"/>   <img src="https://img.shields.io/github/license/shinnpuru/GalTransl-for-ASMR"/>   <img src="https://img.shields.io/github/stars/shinnpuru/GalTransl-for-ASMR"/></div>
 
-<h1><p align='center' >GalTransl for ASMR</p></h1>
-
 GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。详细说明请见 [视频教程](https://www.bilibili.com/video/BV1ZoUYYXEio)。
+
+<div align=center><img src="title.jpg" alt="title" style="width:512px;"/></div>
 
 ## 特色
 
@@ -20,7 +20,7 @@ GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以
 
 1. 从Release页面下载最新版本的[GalTransl for ASMR](https://github.com/shinnpuru/GalTransl-for-ASMR/releases)，解压后运行`app.exe`。
 
-2. 听写模型基于[faster-whisper](https://github.com/Purfview/whisper-standalone-win)引擎，需要自行下载，请选择合适的模型下载然后放到`whisper-faster`文件夹。同时请下载[DLL文件](https://github.com/Purfview/whisper-standalone-win/releases/download/libs/cuBLAS.and.cuDNN_CUDA11_win_v2.7z)和[EXE文件](https://github.com/Purfview/whisper-standalone-win/releases/download/faster-whisper/Whisper-Faster_r192.3_windows.zip)，放到`whisper-faster`文件夹。
+2. 听写模型基于[faster-whisper](https://github.com/Purfview/whisper-standalone-win)引擎，需要自行下载，请选择合适的模型下载然后放到`whisper-faster`文件夹。同时请根据[配置要求](whisper-faster/README.md)准备DLL和EXE文件。
 
 | 名称  | 磁盘    | 显存     | 链接 |
 | ------ | ------- | ------- | ----- |
