@@ -488,7 +488,7 @@ class MainWorker(QObject):
                     continue
 
                 import subprocess
-                self.pid = subprocess.Popen(['llama/server.exe', '-m', 'llama/'+sakura_file, '-c', '2048', '-ngl' , str(sakura_mode), '--host', '127.0.0.1', '--port', '8989'])
+                self.pid = subprocess.Popen(['llama/llama-server.exe', '-m', 'llama/'+sakura_file, '-ngl' , str(sakura_mode), '--port', '8989'])
 
             self.status.emit("[INFO] 正在进行翻译...")
             from GalTransl.__main__ import worker
