@@ -469,7 +469,7 @@ class MainWorker(QObject):
 
                 self.status.emit("[INFO] 正在进行音频提取...")
                 import subprocess
-                self.pid = subprocess.Popen(['ffmpeg.exe', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'])
+                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'])
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
@@ -477,7 +477,7 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 正在进行语音识别...")
 
                 if whisper_file.startswith('ggml'):
-                    self.pid = subprocess.Popen(['whisper/main.exe', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file])
+                    self.pid = subprocess.Popen(['whisper/main', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file])
                 else:
                     self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', language, '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav'])
                 self.pid.wait()
@@ -499,7 +499,7 @@ class MainWorker(QObject):
                     continue
 
                 import subprocess
-                self.pid = subprocess.Popen(['llama/llama-server.exe', '-m', 'llama/'+sakura_file, '-ngl' , str(sakura_mode), '--port', '8989'])
+                self.pid = subprocess.Popen(['llama/llama-server', '-m', 'llama/'+sakura_file, '-ngl' , str(sakura_mode), '--port', '8989'])
 
             self.status.emit("[INFO] 正在进行翻译...")
             from GalTransl.__main__ import worker
