@@ -12,11 +12,12 @@ TRANSLATOR_SUPPORTED = [
     "sakura-009",
     "sakura-010",
     "index",
-    "Galtransl",
-    "gpt35-0613",
+    "galtransl",
+    "gpt-custom",
     "gpt35-1106",
     "gpt4-turbo",
     "moonshot-v1-8k",
+    "deepseek-chat",
     "glm-4",
     "glm-4-flash",
     "qwen2-7b-instruct",
@@ -63,9 +64,10 @@ class MainWindow(QMainWindow):
                 translator = lines[1].strip()
                 gpt_token = lines[2].strip()
                 gpt_address = lines[3].strip()
-                sakura_file = lines[4].strip()
-                sakura_mode = int(lines[5].strip())
-                proxy_address = lines[6].strip()
+                gpt_model = lines[4].strip()
+                sakura_file = lines[5].strip()
+                sakura_mode = int(lines[6].strip())
+                proxy_address = lines[7].strip()
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
@@ -178,10 +180,15 @@ class MainWindow(QMainWindow):
         self.gpt_token.setPlaceholderText("留空为使用上次配置的Token。")
         self.settings_layout.addWidget(self.gpt_token)
 
-        self.settings_layout.addWidget(SubtitleLabel("🌌 自定义OpenAI地址"))
+        self.settings_layout.addWidget(SubtitleLabel("🌌 自定义OpenAI地址 (gpt-custom)"))
         self.gpt_address = QLineEdit()
-        self.gpt_address.setPlaceholderText("例如：https://api.openai.com")
+        self.gpt_address.setPlaceholderText("例如：https://127.0.0.1")
         self.settings_layout.addWidget(self.gpt_address)
+
+        self.settings_layout.addWidget(SubtitleLabel("🌌 自定义OpenAI模型 (gpt-custom)"))
+        self.gpt_model = QLineEdit()
+        self.gpt_model.setPlaceholderText("例如：llama3")
+        self.settings_layout.addWidget(self.gpt_model)
         
         self.settings_layout.addWidget(BodyLabel("📦 离线模型文件"))
         self.sakura_file = QComboBox()
@@ -283,6 +290,7 @@ class MainWorker(QObject):
         translator = self.master.translator_group.currentText()
         gpt_token = self.master.gpt_token.text()
         gpt_address = self.master.gpt_address.text()
+        gpt_model = self.master.gpt_model.text()
         sakura_file = self.master.sakura_file.currentText()
         sakura_mode = self.master.sakura_mode.value()
         proxy_address = self.master.proxy_address.text()
@@ -292,7 +300,7 @@ class MainWorker(QObject):
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{gpt_token}\n{gpt_address}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n")
+            f.write(f"{whisper_file}\n{translator}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n")
 
         self.status.emit("[INFO] 正在初始化项目文件夹...")
 
@@ -336,33 +344,39 @@ class MainWorker(QObject):
 
         for idx, line in enumerate(lines):
             if 'gpt' in translator and gpt_token:
-                if not gpt_address:
+                if not 'custom' in translator:
                     gpt_address = 'https://api.openai.com'
+                    gpt_model = ''
                 if 'GPT35:' in line:
                     lines[idx+2] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: {gpt_address}\n"
-                    lines[idx+7] = f'    rewriteModelName: ""\n'
+                    lines[idx+7] = f'    rewriteModelName: "{gpt_model}"\n'
                 if 'GPT4: # GPT4 API' in line:
                     lines[idx+2] = f"      - token: {gpt_token}\n"
                     lines[idx+4] = f"    defaultEndpoint: {gpt_address}\n"
             if 'moonshot' in translator and gpt_token:
                 if 'GPT35:' in line:
-                    lines[idx+4] = f"      - token: {gpt_token}\n"
+                    lines[idx+2] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://api.moonshot.cn\n"
-                    lines[idx+7] = f'    rewriteModelName: "moonshot-v1-8k"\n'
+                    lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
+            if 'deepseek' in translator and gpt_token:
+                if 'GPT35:' in line:
+                    lines[idx+2] = f"      - token: {gpt_token}\n"
+                    lines[idx+6] = f"    defaultEndpoint: https://api.deepseek.com\n"
+                    lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
             if 'qwen' in translator and gpt_token:
                 if 'GPT35:' in line:
-                    lines[idx+4] = f"      - token: {gpt_token}\n"
+                    lines[idx+2] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://dashscope.aliyuncs.com/compatible-mode\n"
                     lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
             if 'glm' in translator and gpt_token:
                 if 'GPT35:' in line:
-                    lines[idx+4] = f"      - token: {gpt_token}\n"
+                    lines[idx+2] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://open.bigmodel.cn/api/paas\n"
                     lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
             if 'abab' in translator and gpt_token:
                 if 'GPT35:' in line:
-                    lines[idx+4] = f"      - token: {gpt_token}\n"
+                    lines[idx+2] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://api.minimax.chat\n"
                     lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
             if proxy_address:
@@ -373,13 +387,13 @@ class MainWorker(QObject):
                 if 'proxy' in line:
                     lines[idx+1] = f"  enableProxy: false\n"
 
-        if 'moonshot' in translator or 'qwen' in translator or 'glm' in translator or 'abab' in translator:
-            translator = 'gpt35-0613'
+        if 'moonshot' in translator or 'qwen' in translator or 'glm' in translator or 'abab' in translator or 'gpt-custom' in translator or 'deepseek' in translator:
+            translator = 'gpt35-1106'
         
         if 'index' in translator:
             translator = 'sakura-009'
 
-        if 'Galtransl' in translator:
+        if 'galtransl' in translator:
             translator = 'sakura-010'
 
         with open('project/config.yaml', 'w', encoding='utf-8') as f:
