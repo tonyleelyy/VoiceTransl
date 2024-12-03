@@ -62,17 +62,20 @@ class MainWindow(QMainWindow):
                 lines = f.readlines()
                 whisper_file = lines[0].strip()
                 translator = lines[1].strip()
-                gpt_token = lines[2].strip()
-                gpt_address = lines[3].strip()
-                gpt_model = lines[4].strip()
-                sakura_file = lines[5].strip()
-                sakura_mode = int(lines[6].strip())
-                proxy_address = lines[7].strip()
+                language = lines[2].strip()
+                gpt_token = lines[3].strip()
+                gpt_address = lines[4].strip()
+                gpt_model = lines[5].strip()
+                sakura_file = lines[6].strip()
+                sakura_mode = int(lines[7].strip())
+                proxy_address = lines[8].strip()
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
+                self.input_lang.setCurrentText(language)
                 self.gpt_token.setText(gpt_token)
                 self.gpt_address.setText(gpt_address)
+                self.gpt_model.setText(gpt_model)
                 self.sakura_file.setCurrentText(sakura_file)
                 self.sakura_mode.setValue(sakura_mode)
                 self.proxy_address.setText(proxy_address)
@@ -135,7 +138,7 @@ class MainWindow(QMainWindow):
         self.before_dict.setPlaceholderText("日文\t日文\n日文\t日文")
         self.dict_layout.addWidget(self.before_dict)
         
-        self.dict_layout.addWidget(BodyLabel("配置翻译后的字典。"))
+        self.dict_layout.addWidget(BodyLabel("配置翻译中的字典。"))
         self.gpt_dict = QTextEdit()
         self.gpt_dict.setPlaceholderText("日文\t中文\n日文\t中文")
         self.dict_layout.addWidget(self.gpt_dict)
@@ -167,6 +170,11 @@ class MainWindow(QMainWindow):
         whisper_lst = [i for i in os.listdir('whisper') if i.startswith('ggml') and i.endswith('bin')] + [i for i in os.listdir('whisper-faster') if i.startswith('faster-whisper')]
         self.whisper_file.addItems(whisper_lst)
         self.settings_layout.addWidget(self.whisper_file)
+
+        self.settings_layout.addWidget(BodyLabel("选择输入的语言。"))
+        self.input_lang = QComboBox()
+        self.input_lang.addItems(['en','ja','ko','ru','fr'])
+        self.settings_layout.addWidget(self.input_lang)
         
         # Translator Section
         self.settings_layout.addWidget(SubtitleLabel("🌍 翻译AI模型"))
@@ -180,12 +188,12 @@ class MainWindow(QMainWindow):
         self.gpt_token.setPlaceholderText("留空为使用上次配置的Token。")
         self.settings_layout.addWidget(self.gpt_token)
 
-        self.settings_layout.addWidget(SubtitleLabel("🌌 自定义OpenAI地址 (gpt-custom)"))
+        self.settings_layout.addWidget(BodyLabel("🌌 自定义OpenAI地址 (gpt-custom)"))
         self.gpt_address = QLineEdit()
         self.gpt_address.setPlaceholderText("例如：https://127.0.0.1")
         self.settings_layout.addWidget(self.gpt_address)
 
-        self.settings_layout.addWidget(SubtitleLabel("🌌 自定义OpenAI模型 (gpt-custom)"))
+        self.settings_layout.addWidget(BodyLabel("📄 自定义OpenAI模型 (gpt-custom)"))
         self.gpt_model = QLineEdit()
         self.gpt_model.setPlaceholderText("例如：llama3")
         self.settings_layout.addWidget(self.gpt_model)
@@ -288,6 +296,7 @@ class MainWorker(QObject):
         yt_url = self.master.yt_url.toPlainText()
         whisper_file = self.master.whisper_file.currentText()
         translator = self.master.translator_group.currentText()
+        language = self.master.input_lang.currentText()
         gpt_token = self.master.gpt_token.text()
         gpt_address = self.master.gpt_address.text()
         gpt_model = self.master.gpt_model.text()
@@ -300,7 +309,7 @@ class MainWorker(QObject):
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n")
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n")
 
         self.status.emit("[INFO] 正在初始化项目文件夹...")
 
@@ -343,6 +352,8 @@ class MainWorker(QObject):
             lines = f.readlines()
 
         for idx, line in enumerate(lines):
+            if 'language' in line:
+                lines[idx] = f'  language: "{language}2zh-cn"\n'
             if 'gpt' in translator and gpt_token:
                 if not 'custom' in translator:
                     gpt_address = 'https://api.openai.com'
@@ -466,9 +477,9 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 正在进行语音识别...")
 
                 if whisper_file.startswith('ggml'):
-                    self.pid = subprocess.Popen(['whisper/main.exe', '-m', 'whisper/'+whisper_file, '-osrt', '-l', 'ja', input_file+'.wav', '-of', input_file])
+                    self.pid = subprocess.Popen(['whisper/main.exe', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file])
                 else:
-                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', 'ja', '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav'])
+                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', language, '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav'])
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
