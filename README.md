@@ -16,11 +16,11 @@ GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以
 * 支持从YouTube/Bilibili直接下载视频。
 * 支持文件和链接批量处理，自动识别文件类型。
 
-## 1. 下载
+## 下载
 
 从Release页面下载最新版本的[GalTransl for ASMR](https://github.com/shinnpuru/GalTransl-for-ASMR/releases)，解压后运行`app.exe`。
 
-## 2.1 听写（NVIDIA推荐）
+## 听写（NVIDIA推荐）
 
 听写模型基于[faster-whisper](https://github.com/Purfview/whisper-standalone-win)引擎，请根据[配置要求](whisper-faster/README.md)准备DLL和EXE文件。
 
@@ -32,7 +32,7 @@ GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以
 | faster-whisper-medium | 1.42 GiB | ~2 GB | [下载](https://huggingface.co/Systran/faster-whisper-medium) |
 | faster-whisper-large-v2  | 2.87 GiB | ~3 GB | [下载](https://huggingface.co/Systran/faster-whisper-large-v2) |
 
-## 2.2 听写（AMD/Intel推荐）
+## 听写（AMD/Intel推荐）
 
 听写模型基于[whisper.cpp](https://github.com/ggerganov/whisper.cpp)引擎，已经为Vulkan编译配置好。
 
@@ -44,7 +44,7 @@ GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以
 | ggml-medium.bin | 1.5 GiB | ~2.1 GB | [下载](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin?download=true) |
 | ggml-large-v2.bin  | 2.9 GiB | ~3.9 GB | [下载](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2.bin?download=true) |
 
-## 3. 翻译
+## 翻译
 
 1. 在线模型支持任意的OpenAI兼容接口，以及国内各大模型。具体列表如下：
 
@@ -85,6 +85,10 @@ GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以
 2. 输出日志乱码
 
 请检查系统编码是否为UTF-8，Windows控制面板-区域-更改日期、时间或数字格式-管理-更改系统区域设置-使用UTF-8提供全球语言支持。
+
+3. 我没有显卡可以用吗
+
+可以使用在线镜像进行运行，不需要显卡，详细请参考[镜像部署](https://www.codewithgpu.com/i/shinnpuru/GalTransl-for-ASMR/GalTransl-for-ASMR)。
 
 ## 开发
 
