@@ -90,6 +90,10 @@ GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以
 
 可以使用在线镜像进行运行，不需要显卡，详细请参考[镜像部署](https://www.codewithgpu.com/i/shinnpuru/GalTransl-for-ASMR/GalTransl-for-ASMR)。
 
+4. 我不是Windows系统可以用吗
+
+Linux可以使用服务器部署进行运行，详细请参考[server分支](https://github.com/shinnpuru/GalTransl-for-ASMR/tree/server)。MacOS暂时不支持，用户可以使用[镜像部署](https://www.codewithgpu.com/i/shinnpuru/GalTransl-for-ASMR/GalTransl-for-ASMR)。
+
 ## 开发
 
 1. 安装依赖
