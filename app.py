@@ -173,7 +173,7 @@ class MainWindow(QMainWindow):
 
         self.settings_layout.addWidget(BodyLabel("选择输入的语言。"))
         self.input_lang = QComboBox()
-        self.input_lang.addItems(['en','ja','ko','ru','fr'])
+        self.input_lang.addItems(['ja','en','ko','ru','fr'])
         self.settings_layout.addWidget(self.input_lang)
         
         # Translator Section
@@ -230,10 +230,6 @@ class MainWindow(QMainWindow):
         self.run_button = QPushButton("🚀 运行")
         self.run_button.clicked.connect(self.run_worker)
         self.output_layout.addWidget(self.run_button)
-
-        self.open_log_button = QPushButton("📤 系统日志")
-        self.open_log_button.clicked.connect(lambda: os.startfile('log.txt') if os.path.exists('log.txt') else None)
-        self.output_layout.addWidget(self.open_log_button)
 
         self.open_output_button = QPushButton("📁 打开下载文件夹")
         self.open_output_button.clicked.connect(lambda: os.startfile(os.path.join(os.getcwd(),'project/cache')))
@@ -518,10 +514,6 @@ class MainWorker(QObject):
         self.finished.emit()
 
 if __name__ == "__main__":
-    log = open('log.txt', 'w', encoding='utf-8')
-    sys.stdout = log
-    sys.stderr = log
-
     app = QApplication(sys.argv)
     main_window = MainWindow()
     main_window.show()

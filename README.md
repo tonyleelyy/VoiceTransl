@@ -82,15 +82,19 @@ GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以
 
 在线模型请检查网络连接是否正常，或者尝试更换代理。离线模型出现连接错误，先检查是否超显存，把离线参数从0开始逐步增加10；然后确认关闭所有的代理软件，在系统设置-网络和Internet-代理里面应该是空的。
 
-2. 输出日志乱码
+2. 多次使用之后闪退
+
+缓存文件中可能存在问题，可以尝试清理下载缓存，或者重新解压程序到一个新的目录。
+
+3. 输出日志乱码
 
 请检查系统编码是否为UTF-8，Windows控制面板-区域-更改日期、时间或数字格式-管理-更改系统区域设置-使用UTF-8提供全球语言支持。
 
-3. 我没有显卡可以用吗
+4. 我没有显卡可以用吗
 
 可以使用在线镜像进行运行，不需要显卡，详细请参考[镜像部署](https://www.codewithgpu.com/i/shinnpuru/GalTransl-for-ASMR/GalTransl-for-ASMR)。
 
-4. 我不是Windows系统可以用吗
+5. 我不是Windows系统可以用吗
 
 Linux可以使用服务器部署进行运行，详细请参考[server分支](https://github.com/shinnpuru/GalTransl-for-ASMR/tree/server)。MacOS暂时不支持，用户可以使用[镜像部署](https://www.codewithgpu.com/i/shinnpuru/GalTransl-for-ASMR/GalTransl-for-ASMR)。
 
