@@ -1,8 +1,8 @@
 
-<h1><p align='center' >GalTransl for ASMR</p></h1>
-<div align=center><img src="https://img.shields.io/github/v/release/shinnpuru/GalTransl-for-ASMR"/>   <img src="https://img.shields.io/github/license/shinnpuru/GalTransl-for-ASMR"/>   <img src="https://img.shields.io/github/stars/shinnpuru/GalTransl-for-ASMR"/></div>
+<h1><p align='center' >VoiceTransl</p></h1>
+<div align=center><img src="https://img.shields.io/github/v/release/shinnpuru/VoiceTransl"/>   <img src="https://img.shields.io/github/license/shinnpuru/VoiceTransl"/>   <img src="https://img.shields.io/github/stars/shinnpuru/VoiceTransl"/></div>
 
-GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。详细说明请见 [视频教程](https://www.bilibili.com/video/BV1ZoUYYXEio)。
+VoiceTransl（原Galtransl for ASMR）是一个离线AI视频字幕生成和翻译软件，您可以使用本程序从外语音视频文件/字幕文件生成中文字幕文件。详细说明请见 [视频教程](https://www.bilibili.com/video/BV1ZoUYYXEio)。
 
 <div align=center><img src="title.jpg" alt="title" style="width:512px;"/></div>
 
@@ -12,17 +12,18 @@ GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以
 * 支持AMD/NVIDIA/Intel GPU加速，翻译引擎支持调整显存占用。
 * 支持多种输入格式，包括音频、视频、SRT字幕。
 * 支持多种输出格式，包括SRT字幕、LRC字幕。
+* 支持多种语言，包括日语，英语，韩语，俄语，法语。
 * 支持字典功能，可以自定义翻译字典，替换输入输出。
 * 支持从YouTube/Bilibili直接下载视频。
 * 支持文件和链接批量处理，自动识别文件类型。
 
 ## 下载
 
-从Release页面下载最新版本的[GalTransl for ASMR](https://github.com/shinnpuru/GalTransl-for-ASMR/releases)，解压后运行`app.exe`。
+从Release页面下载最新版本的[VoiceTransl](https://github.com/shinnpuru/VoiceTransl/releases)，解压后运行`app.exe`。
 
-## 听写（NVIDIA推荐）
+## 听写
 
-听写模型基于[faster-whisper](https://github.com/Purfview/whisper-standalone-win)引擎，请根据[配置要求](whisper-faster/README.md)准备DLL和EXE文件。
+* NVIDIA推荐使用[faster-whisper](https://github.com/Purfview/whisper-standalone-win)模型，支持更高的准确率。请根据[配置要求](whisper-faster/README.md)准备DLL和EXE文件。
 
 模型需要自行下载，请选择合适的模型下载然后放到`whisper-faster`文件夹。
 
@@ -32,9 +33,7 @@ GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以
 | faster-whisper-medium | 1.42 GiB | ~2 GB | [下载](https://huggingface.co/Systran/faster-whisper-medium) |
 | faster-whisper-large-v2  | 2.87 GiB | ~3 GB | [下载](https://huggingface.co/Systran/faster-whisper-large-v2) |
 
-## 听写（AMD/Intel推荐）
-
-听写模型基于[whisper.cpp](https://github.com/ggerganov/whisper.cpp)引擎，已经为Vulkan编译配置好。
+* AMD/Intel推荐使用[whisper.cpp](https://github.com/ggerganov/whisper.cpp)模型，支持更高的兼容性，引擎已经为Vulkan编译配置好。
 
 模型需要自行下载，请选择合适的模型下载然后放到`whisper`文件夹。
 
@@ -74,7 +73,7 @@ GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以
 | [GalTransl-7B-Q6](https://github.com/xd2333/GalTransl) | 5.9 GiB | ~11 GB | [下载](https://huggingface.co/SakuraLLM/GalTransl-7B-v2.5/resolve/main/GalTransl-7B-v2-Q6_K.gguf?download=true) |
 | [Sakura-13B-Q4](https://github.com/SakuraLLM/SakuraLLM)  | 9.45 GB | ~16 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-14B-LNovel-v0.9b-GGUF/resolve/main/sakura-13b-lnovel-v0.9b-Q4_K_M.gguf?download=true) |
 
-3. 如果需要使用Ollama或者其他本地模型引擎，请使用gpt-custom接口，并配置自定义OpenAI地址为`http://localhost:11434`，具体请参考[OpenAI兼容性](https://ollama.com/blog/openai-compatibility).
+3. 如果需要使用Ollama或者其他本地模型引擎，请使用gpt-custom接口，配置自定义OpenAI地址为`http://localhost:11434`，并填写自定义OpenAI模型。具体请参考[OpenAI兼容性](https://ollama.com/blog/openai-compatibility).
 
 ## 常见问题
 
@@ -86,15 +85,15 @@ GalTransl for ASMR是一个离线AI视频字幕生成和翻译软件，您可以
 
 缓存文件中可能存在问题，可以尝试清理下载缓存，或者重新解压程序到一个新的目录。
 
-3. 输出日志乱码
+3. 命令行输出乱码
 
 请检查系统编码是否为UTF-8，Windows控制面板-区域-更改日期、时间或数字格式-管理-更改系统区域设置-使用UTF-8提供全球语言支持。
 
-4. 我没有显卡可以用吗
+4. 没有显卡可以用吗
 
 可以使用在线镜像进行运行，不需要显卡，详细请参考[镜像部署](https://www.codewithgpu.com/i/shinnpuru/GalTransl-for-ASMR/GalTransl-for-ASMR)。
 
-5. 我不是Windows系统可以用吗
+5. 不是Windows系统可以用吗
 
 Linux可以使用服务器部署进行运行，详细请参考[server分支](https://github.com/shinnpuru/GalTransl-for-ASMR/tree/server)。MacOS暂时不支持，用户可以使用[镜像部署](https://www.codewithgpu.com/i/shinnpuru/GalTransl-for-ASMR/GalTransl-for-ASMR)。
 

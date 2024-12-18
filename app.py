@@ -45,7 +45,7 @@ class MainWindow(QMainWindow):
         self.thread = None
         self.worker = None
 
-        self.setWindowTitle("GalTransl for ASMR")
+        self.setWindowTitle("VoiceTransl")
         self.resize(800, 600)
         self.initUI()
         
@@ -88,7 +88,7 @@ class MainWindow(QMainWindow):
         self.about_layout.addWidget(TitleLabel("📖 关于"))
         self.introduce_text = QTextEdit()
         self.introduce_text.setReadOnly(True)
-        self.introduce_text.setPlainText("GalTransl是一套将数个基础功能上的微小创新与对GPT提示工程（Prompt Engineering）的深度利用相结合的Galgame自动化翻译工具，用于制作内嵌式翻译补丁。 GalTransl for ASMR是GalTransl的一个分支，您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。项目地址及使用说明: https://github.com/shinnpuru/GalTransl-for-ASMR。")
+        self.introduce_text.setPlainText("VoiceTransl（原Galtransl for ASMR）是一个离线AI视频字幕生成和翻译软件，您可以使用本程序从外语音视频文件/字幕文件生成中文字幕文件。项目地址及使用说明: https://github.com/shinnpuru/VoiceTransl。")
         self.about_layout.addWidget(self.introduce_text)
 
         # disclaimer
@@ -104,7 +104,7 @@ class MainWindow(QMainWindow):
         self.input_output_tab = Widget("Home", self)
         self.input_output_layout = self.input_output_tab.vBoxLayout
         
-        self.input_output_layout.addWidget(TitleLabel("🎉 欢迎使用GalTransl for ASMR！"))
+        self.input_output_layout.addWidget(TitleLabel("🎉 欢迎使用VoiceTransl！"))
         self.input_output_layout.addWidget(BodyLabel("📄 您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。"))
         
         # Input Section
@@ -190,12 +190,12 @@ class MainWindow(QMainWindow):
 
         self.settings_layout.addWidget(BodyLabel("🌌 自定义OpenAI地址 (gpt-custom)"))
         self.gpt_address = QLineEdit()
-        self.gpt_address.setPlaceholderText("例如：https://127.0.0.1")
+        self.gpt_address.setPlaceholderText("例如：http://127.0.0.1:11434")
         self.settings_layout.addWidget(self.gpt_address)
 
         self.settings_layout.addWidget(BodyLabel("📄 自定义OpenAI模型 (gpt-custom)"))
         self.gpt_model = QLineEdit()
-        self.gpt_model.setPlaceholderText("例如：llama3")
+        self.gpt_model.setPlaceholderText("例如：qwen2.5")
         self.settings_layout.addWidget(self.gpt_model)
         
         self.settings_layout.addWidget(BodyLabel("📦 离线模型文件"))
@@ -350,40 +350,43 @@ class MainWorker(QObject):
         for idx, line in enumerate(lines):
             if 'language' in line:
                 lines[idx] = f'  language: "{language}2zh-cn"\n'
-            if 'gpt' in translator and gpt_token:
-                if not 'custom' in translator:
+            if 'gpt' in translator:
+                if not gpt_address:
                     gpt_address = 'https://api.openai.com'
+                if not gpt_model:
                     gpt_model = ''
+                if not gpt_token:
+                    gpt_token = 'sk-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
                 if 'GPT35:' in line:
-                    lines[idx+2] = f"      - token: {gpt_token}\n"
+                    lines[idx+4] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: {gpt_address}\n"
                     lines[idx+7] = f'    rewriteModelName: "{gpt_model}"\n'
                 if 'GPT4: # GPT4 API' in line:
                     lines[idx+2] = f"      - token: {gpt_token}\n"
                     lines[idx+4] = f"    defaultEndpoint: {gpt_address}\n"
-            if 'moonshot' in translator and gpt_token:
+            if 'moonshot' in translator:
                 if 'GPT35:' in line:
-                    lines[idx+2] = f"      - token: {gpt_token}\n"
+                    lines[idx+4] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://api.moonshot.cn\n"
                     lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
-            if 'deepseek' in translator and gpt_token:
+            if 'deepseek' in translator:
                 if 'GPT35:' in line:
-                    lines[idx+2] = f"      - token: {gpt_token}\n"
+                    lines[idx+4] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://api.deepseek.com\n"
                     lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
-            if 'qwen' in translator and gpt_token:
+            if 'qwen' in translator:
                 if 'GPT35:' in line:
-                    lines[idx+2] = f"      - token: {gpt_token}\n"
+                    lines[idx+4] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://dashscope.aliyuncs.com/compatible-mode\n"
                     lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
-            if 'glm' in translator and gpt_token:
+            if 'glm' in translator:
                 if 'GPT35:' in line:
-                    lines[idx+2] = f"      - token: {gpt_token}\n"
+                    lines[idx+4] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://open.bigmodel.cn/api/paas\n"
                     lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
-            if 'abab' in translator and gpt_token:
+            if 'abab' in translator:
                 if 'GPT35:' in line:
-                    lines[idx+2] = f"      - token: {gpt_token}\n"
+                    lines[idx+4] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://api.minimax.chat\n"
                     lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
             if proxy_address:
