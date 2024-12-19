@@ -66,12 +66,21 @@ VoiceTransl（原Galtransl for ASMR）是一个离线AI视频字幕生成和翻�
 
 模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。
 
+日语
+
 | 模型  | 磁盘    | 显存     | 链接 |
 | ------ | ------- | ------- | ----- |
-| [Index-1.9B-Q4](https://github.com/bilibili/Index-1.9B)  | 1.24 MiB | ~4G | [下载](https://huggingface.co/IndexTeam/Index-1.9B-Chat-GGUF/resolve/main/ggml-model-Q4_K_M.gguf?download=true) |
-| [Sakura-7B-Q4](https://github.com/SakuraLLM/SakuraLLM)  | 4.56 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-7B-LNovel-v0.9-GGUF/resolve/main/sakura-7b-lnovel-v0.9-Q4_K_M.gguf?download=true) |
-| [GalTransl-7B-Q6](https://github.com/xd2333/GalTransl) | 5.9 GiB | ~11 GB | [下载](https://huggingface.co/SakuraLLM/GalTransl-7B-v2.5/resolve/main/GalTransl-7B-v2-Q6_K.gguf?download=true) |
-| [Sakura-13B-Q4](https://github.com/SakuraLLM/SakuraLLM)  | 9.45 GB | ~16 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-14B-LNovel-v0.9b-GGUF/resolve/main/sakura-13b-lnovel-v0.9b-Q4_K_M.gguf?download=true) |
+| [Index-1.9B-Q4](https://github.com/bilibili/Index-1.9B)  | ~1 GiB | ~4G | [下载](https://huggingface.co/IndexTeam/Index-1.9B-Chat-GGUF) |
+| [Sakura-7B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM)  | ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-7B-Qwen2.5-v1.0-GGUF) |
+| [GalTransl-7B-v2.6-Q4](https://github.com/xd2333/GalTransl) | ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/GalTransl-7B-v2.6) |
+| [Sakura-14B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM)  | ~9 GiB | ~16 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF) |
+
+英语
+
+| 模型  | 磁盘    | 显存     | 链接 |
+| ------ | ------- | ------- | ----- |
+| [Qwen-2.5-7B-Q4](https://github.com/QwenLM/Qwen2.5)  | ~5 GiB | ~8 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF) |
+| [Qwen-2.5-14B-Q4](https://github.com/QwenLM/Qwen2.5)  | ~9 GiB | ~16 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF) |
 
 3. 如果需要使用Ollama或者其他本地模型引擎，请使用gpt-custom接口，配置自定义OpenAI地址为`http://localhost:11434`，并填写自定义OpenAI模型。具体请参考[OpenAI兼容性](https://ollama.com/blog/openai-compatibility).
 
