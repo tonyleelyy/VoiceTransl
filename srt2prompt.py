@@ -4,7 +4,7 @@ import json, argparse
 from datetime import timedelta
 import pysrt
 
-def make_prompt(input_file, output_file):
+def make_prompt(input_file, output_file=None):
     # read srt file
     subs = pysrt.open(input_file)
 
@@ -21,6 +21,10 @@ def make_prompt(input_file, output_file):
 
         message = subs[i].text
         data.append({"start": start, "end": end, "message": message})
+
+    if not output_file:
+        return data
+
     # write prompt file
     with open(output_file, 'w', encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)

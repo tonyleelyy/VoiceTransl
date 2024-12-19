@@ -55,6 +55,7 @@ class MainWindow(QMainWindow):
         self.initDictTab()
         self.initOutputTab()
         self.initAboutTab()
+        self.initToolTab()
 
         # load config
         if os.path.exists('config.txt'):
@@ -235,11 +236,54 @@ class MainWindow(QMainWindow):
         self.open_output_button.clicked.connect(lambda: os.startfile(os.path.join(os.getcwd(),'project/cache')))
         self.output_layout.addWidget(self.open_output_button)
         
-        self.clean_button = QPushButton("🧹 清空下载缓存")
+        self.clean_button = QPushButton("🧹 清空缓存")
         self.clean_button.clicked.connect(self.cleaner)
         self.output_layout.addWidget(self.clean_button)
 
         self.addSubInterface(self.output_tab, FluentIcon.DOCUMENT, "输出", NavigationItemPosition.TOP)
+
+    def initToolTab(self):
+        self.tool_tab = Widget("Tool", self)
+        self.tool_layout = self.tool_tab.vBoxLayout
+
+        self.tool_layout.addWidget(TitleLabel("🛠️ 工具"))
+
+        # Split Section
+        self.tool_layout.addWidget(SubtitleLabel("🔪 音频分割工具"))
+        self.tool_layout.addWidget(BodyLabel("拖拽文件到下方框内，点击运行即可，每个文件生成一个文件夹。数字代表每段音频的长度（秒）。"))
+        self.split_value = QLineEdit()
+        self.split_value.setPlaceholderText("600")
+        self.split_value.setReadOnly(True)
+        self.tool_layout.addWidget(self.split_value)
+        self.split_mode = QSlider(Qt.Horizontal)
+        self.split_mode.setRange(0, 3600)
+        self.split_mode.setValue(600)
+        self.split_mode.valueChanged.connect(lambda: self.split_value.setText(str(self.split_mode.value())))
+        self.tool_layout.addWidget(self.split_mode)
+
+
+        self.split_files_list = QTextEdit()
+        self.split_files_list.setAcceptDrops(True)
+        self.split_files_list.dropEvent = lambda e: self.split_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
+        self.split_files_list.setPlaceholderText("当前未选择本地文件...")
+        self.tool_layout.addWidget(self.split_files_list)
+        self.run_split_button = QPushButton("🚀 运行")
+        self.run_split_button.clicked.connect(self.run_split)
+        self.tool_layout.addWidget(self.run_split_button)
+
+        # Merge Section
+        self.tool_layout.addWidget(SubtitleLabel("🔗 字幕合并工具"))
+        self.tool_layout.addWidget(BodyLabel("拖拽字幕文件到下方框内，点击运行即可，每次合并一个文件。时间戳按照分割的时间累加。"))
+        self.merge_files_list = QTextEdit()
+        self.merge_files_list.setAcceptDrops(True)
+        self.merge_files_list.dropEvent = lambda e: self.merge_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
+        self.merge_files_list.setPlaceholderText("当前未选择本地文件...")
+        self.tool_layout.addWidget(self.merge_files_list)
+        self.run_merge_button = QPushButton("🚀 运行")
+        self.run_merge_button.clicked.connect(self.run_merge)
+        self.tool_layout.addWidget(self.run_merge_button)
+        
+        self.addSubInterface(self.tool_tab, FluentIcon.ASTERISK, "工具", NavigationItemPosition.TOP)
         
     def select_input(self):
         options = QFileDialog.Options()
@@ -248,20 +292,27 @@ class MainWindow(QMainWindow):
             self.input_files_list.setPlainText('\n'.join(files))
 
     def run_worker(self):
-        # Create a thread object
         self.thread = QThread()
-
-        # Create a worker object
         self.worker = MainWorker(self)
-
-        # Move worker to the thread
         self.worker.moveToThread(self.thread)
-
-        # Connect signals and slots
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(self.thread.quit)
+        self.thread.start()
 
-        # Start the thread
+    def run_split(self):
+        self.thread = QThread()
+        self.worker = MainWorker(self)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.split)
+        self.worker.finished.connect(self.thread.quit)
+        self.thread.start()
+
+    def run_merge(self):
+        self.thread = QThread()
+        self.worker = MainWorker(self)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.merge)
+        self.worker.finished.connect(self.thread.quit)
         self.thread.start()
     
     def cleaner(self):
@@ -285,6 +336,60 @@ class MainWorker(QObject):
         super().__init__()
         self.master = master
         self.status = master.status
+
+    def split(self):
+        self.status.emit("[INFO] 正在读取配置...")
+        input_files = self.master.split_files_list.toPlainText()
+        split_mode = self.master.split_mode.value()
+        if input_files:
+            input_files = input_files.strip().split('\n')
+            for idx, input_file in enumerate(input_files):
+                if not os.path.exists(input_file):
+                    self.status.emit(f"[ERROR] {input_file}文件不存在，请重新选择文件！")
+                    continue
+
+                self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(input_files)}个")
+                os.makedirs(os.path.join(*(input_file.split('.')[:-1])), exist_ok=True)
+
+                self.status.emit(f"[INFO] 正在进行音频提取...每{split_mode}秒分割一次")
+                self.status.emit("[INFO] 正在进行音频提取...")
+                import subprocess
+                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file,  '-f', 'segment', '-segment_time', str(split_mode), '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', os.path.join(*(input_file.split('.')[:-1]+['%04d.wav']))])
+                self.pid.wait()
+                self.pid.kill()
+                self.pid.terminate()
+
+            self.status.emit("[INFO] 所有文件处理完成！")
+        self.finished.emit()
+
+    def merge(self):
+        self.status.emit("[INFO] 正在读取配置...")
+        input_files = self.master.merge_files_list.toPlainText()
+        split_mode = self.master.split_mode.value()
+        if input_files:
+            input_files = sorted(input_files.strip().split('\n'))
+            merged_prompt = []
+            for idx, input_file in enumerate(input_files):
+                if not os.path.exists(input_file):
+                    self.status.emit(f"[ERROR] {input_file}文件不存在，请重新选择文件！")
+                    continue
+
+                self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(input_files)}个")
+                from srt2prompt import make_prompt
+                prompt = make_prompt(input_file)
+
+                for i in prompt:
+                    i['start'] += idx * split_mode
+                    i['end'] += idx * split_mode
+                    merged_prompt.append(i)
+
+            from prompt2srt import make_srt
+            with open(input_files[0].replace('.srt','_merged.json'), 'w', encoding='utf-8') as f:
+                import json
+                json.dump(merged_prompt, f, ensure_ascii=False, indent=4)
+            make_srt(input_files[0].replace('.srt','_merged.json'), input_files[0].replace('.srt','_merged.srt'))
+            self.status.emit("[INFO] 所有文件处理完成！")
+        self.finished.emit()
 
     def run(self):
         self.status.emit("[INFO] 正在读取配置...")
@@ -466,12 +571,15 @@ class MainWorker(QObject):
                     self.status.emit("[INFO] 未选择语音识别模型文件，请重新配置...")
                     break
 
-                self.status.emit("[INFO] 正在进行音频提取...")
-                import subprocess
-                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'])
-                self.pid.wait()
-                self.pid.kill()
-                self.pid.terminate()
+                if input_file.endswith('.wav'):
+                    input_file = input_file[:-4]
+                else:
+                    self.status.emit("[INFO] 正在进行音频提取...")
+                    import subprocess
+                    self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'])
+                    self.pid.wait()
+                    self.pid.kill()
+                    self.pid.terminate()
 
                 self.status.emit("[INFO] 正在进行语音识别...")
 
