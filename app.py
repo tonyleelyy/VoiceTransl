@@ -1,7 +1,8 @@
 import sys, os
 
-os.chdir(sys._MEIPASS)
+# os.chdir(sys._MEIPASS)
 import shutil
+from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
 from PyQt5.QtWidgets import QApplication, QVBoxLayout, QFileDialog, QFrame
 from qfluentwidgets import PushButton as QPushButton, TextEdit as QTextEdit, LineEdit as QLineEdit, ComboBox as QComboBox, Slider as QSlider, FluentWindow as QMainWindow
@@ -46,6 +47,8 @@ class MainWindow(QMainWindow):
         self.worker = None
 
         self.setWindowTitle("VoiceTransl")
+        self.status.connect(lambda x: self.setWindowTitle(f"VoiceTransl - {x}"))
+        self.setWindowIcon(QtGui.QIcon('icon.png'))
         self.resize(800, 600)
         self.initUI()
         
@@ -53,9 +56,8 @@ class MainWindow(QMainWindow):
         self.initInputOutputTab()
         self.initSettingsTab()
         self.initDictTab()
-        self.initOutputTab()
-        self.initAboutTab()
         self.initToolTab()
+        self.initAboutTab()
 
         # load config
         if os.path.exists('config.txt'):
@@ -106,7 +108,6 @@ class MainWindow(QMainWindow):
         self.input_output_layout = self.input_output_tab.vBoxLayout
         
         self.input_output_layout.addWidget(TitleLabel("🎉 欢迎使用VoiceTransl！"))
-        self.input_output_layout.addWidget(BodyLabel("📄 您可以使用本程序将日语音视频文件/字幕文件转换为中文字幕文件。"))
         
         # Input Section
         self.input_file_button = QPushButton("📂 请选择音视频文件/SRT文件或拖拽文件到窗口（可多选）。")
@@ -126,6 +127,24 @@ class MainWindow(QMainWindow):
         self.yt_url.setAcceptDrops(False)
         self.yt_url.setPlaceholderText("例如：https://www.youtube.com/watch?v=...\n例如：BV1Lxt5e8EJF")
         self.input_output_layout.addWidget(self.yt_url)
+
+        self.run_button = QPushButton("🚀 运行")
+        self.run_button.clicked.connect(self.run_worker)
+        self.input_output_layout.addWidget(self.run_button)
+
+        self.output_text_edit = QTextEdit()
+        self.output_text_edit.setReadOnly(True)
+        self.output_text_edit.setPlaceholderText("当前无输出信息...")
+        self.status.connect(self.output_text_edit.append)
+        self.input_output_layout.addWidget(self.output_text_edit)
+
+        self.open_output_button = QPushButton("📁 打开下载文件夹")
+        self.open_output_button.clicked.connect(lambda: os.startfile(os.path.join(os.getcwd(),'project/cache')))
+        self.input_output_layout.addWidget(self.open_output_button)
+        
+        self.clean_button = QPushButton("🧹 清空缓存")
+        self.clean_button.clicked.connect(self.cleaner)
+        self.input_output_layout.addWidget(self.clean_button)
         
         self.addSubInterface(self.input_output_tab, FluentIcon.HOME, "主页", NavigationItemPosition.TOP)
 
@@ -158,15 +177,13 @@ class MainWindow(QMainWindow):
         self.settings_layout.addWidget(TitleLabel("⚙️ 设置"))
         
         # Proxy Section
-        self.settings_layout.addWidget(SubtitleLabel("🌐 代理设置"))
-        self.settings_layout.addWidget(BodyLabel("设置代理地址以便下载视频。"))
+        self.settings_layout.addWidget(BodyLabel("🌐 代理设置：设置代理地址以便下载视频。"))
         self.proxy_address = QLineEdit()
-        self.proxy_address.setPlaceholderText("例如：http://127.0.0.1:7890，留空为不使用代理。")
+        self.proxy_address.setPlaceholderText("例如：http://127.0.0.1:7890，留空为不使用")
         self.settings_layout.addWidget(self.proxy_address)
         
         # Whisper Section
-        self.settings_layout.addWidget(SubtitleLabel("🗣️ 语音识别AI模型"))
-        self.settings_layout.addWidget(BodyLabel("选择用于语音识别的 Whisper 模型文件。"))
+        self.settings_layout.addWidget(BodyLabel("🗣️ 语音识别AI模型：选择用于语音识别的 Whisper 模型文件。（必选）"))
         self.whisper_file = QComboBox()
         whisper_lst = [i for i in os.listdir('whisper') if i.startswith('ggml') and i.endswith('bin')] + [i for i in os.listdir('whisper-faster') if i.startswith('faster-whisper')]
         self.whisper_file.addItems(whisper_lst)
@@ -178,8 +195,7 @@ class MainWindow(QMainWindow):
         self.settings_layout.addWidget(self.input_lang)
         
         # Translator Section
-        self.settings_layout.addWidget(SubtitleLabel("🌍 翻译AI模型"))
-        self.settings_layout.addWidget(BodyLabel("选择用于翻译的模型类别。"))
+        self.settings_layout.addWidget(BodyLabel("🌍 翻译AI模型：选择用于翻译的模型类别。（必选）"))
         self.translator_group = QComboBox()
         self.translator_group.addItems(TRANSLATOR_SUPPORTED)
         self.settings_layout.addWidget(self.translator_group)
@@ -217,30 +233,6 @@ class MainWindow(QMainWindow):
         self.settings_layout.addWidget(self.sakura_mode)
         
         self.addSubInterface(self.settings_tab, FluentIcon.SETTING, "设置", NavigationItemPosition.TOP)
-    
-    def initOutputTab(self):
-        self.output_tab = Widget("Output", self)
-        self.output_layout = self.output_tab.vBoxLayout
-
-        self.output_layout.addWidget(TitleLabel("💾 输出"))
-        self.output_text_edit = QTextEdit()
-        self.output_text_edit.setReadOnly(True)
-        self.status.connect(self.output_text_edit.append)
-        self.output_layout.addWidget(self.output_text_edit)
-
-        self.run_button = QPushButton("🚀 运行")
-        self.run_button.clicked.connect(self.run_worker)
-        self.output_layout.addWidget(self.run_button)
-
-        self.open_output_button = QPushButton("📁 打开下载文件夹")
-        self.open_output_button.clicked.connect(lambda: os.startfile(os.path.join(os.getcwd(),'project/cache')))
-        self.output_layout.addWidget(self.open_output_button)
-        
-        self.clean_button = QPushButton("🧹 清空缓存")
-        self.clean_button.clicked.connect(self.cleaner)
-        self.output_layout.addWidget(self.clean_button)
-
-        self.addSubInterface(self.output_tab, FluentIcon.DOCUMENT, "输出", NavigationItemPosition.TOP)
 
     def initToolTab(self):
         self.tool_tab = Widget("Tool", self)
@@ -282,8 +274,20 @@ class MainWindow(QMainWindow):
         self.run_merge_button = QPushButton("🚀 运行")
         self.run_merge_button.clicked.connect(self.run_merge)
         self.tool_layout.addWidget(self.run_merge_button)
+
+        # Merge Section
+        self.tool_layout.addWidget(SubtitleLabel("💾 视频合成工具"))
+        self.tool_layout.addWidget(BodyLabel("拖拽字幕文件和视频文件到下方框内，点击运行即可。字幕和视频文件需要一一对应，例如output.mp4和output.mp4.srt。"))
+        self.synth_files_list = QTextEdit()
+        self.synth_files_list.setAcceptDrops(True)
+        self.synth_files_list.dropEvent = lambda e: self.synth_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
+        self.synth_files_list.setPlaceholderText("当前未选择本地文件...")
+        self.tool_layout.addWidget(self.synth_files_list)
+        self.run_synth_button = QPushButton("🚀 运行")
+        self.run_synth_button.clicked.connect(self.run_synth)
+        self.tool_layout.addWidget(self.run_synth_button)
         
-        self.addSubInterface(self.tool_tab, FluentIcon.ASTERISK, "工具", NavigationItemPosition.TOP)
+        self.addSubInterface(self.tool_tab, FluentIcon.BRUSH, "工具", NavigationItemPosition.TOP)
         
     def select_input(self):
         options = QFileDialog.Options()
@@ -312,6 +316,14 @@ class MainWindow(QMainWindow):
         self.worker = MainWorker(self)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.merge)
+        self.worker.finished.connect(self.thread.quit)
+        self.thread.start()
+
+    def run_synth(self):
+        self.thread = QThread()
+        self.worker = MainWorker(self)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.synth)
         self.worker.finished.connect(self.thread.quit)
         self.thread.start()
     
@@ -346,20 +358,18 @@ class MainWorker(QObject):
             for idx, input_file in enumerate(input_files):
                 if not os.path.exists(input_file):
                     self.status.emit(f"[ERROR] {input_file}文件不存在，请重新选择文件！")
-                    continue
+                    self.finished.emit()
 
                 self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(input_files)}个")
                 os.makedirs(os.path.join(*(input_file.split('.')[:-1])), exist_ok=True)
 
                 self.status.emit(f"[INFO] 正在进行音频提取...每{split_mode}秒分割一次")
-                self.status.emit("[INFO] 正在进行音频提取...")
                 import subprocess
                 self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file,  '-f', 'segment', '-segment_time', str(split_mode), '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', os.path.join(*(input_file.split('.')[:-1]+['%04d.wav']))])
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
-
-            self.status.emit("[INFO] 所有文件处理完成！")
+                self.status.emit("[INFO] 音频分割完成！")
         self.finished.emit()
 
     def merge(self):
@@ -372,7 +382,7 @@ class MainWorker(QObject):
             for idx, input_file in enumerate(input_files):
                 if not os.path.exists(input_file):
                     self.status.emit(f"[ERROR] {input_file}文件不存在，请重新选择文件！")
-                    continue
+                    self.finished.emit()
 
                 self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(input_files)}个")
                 from srt2prompt import make_prompt
@@ -389,6 +399,38 @@ class MainWorker(QObject):
                 json.dump(merged_prompt, f, ensure_ascii=False, indent=4)
             make_srt(input_files[0].replace('.srt','_merged.json'), input_files[0].replace('.srt','_merged.srt'))
             self.status.emit("[INFO] 所有文件处理完成！")
+        self.finished.emit()
+
+    def synth(self):
+        self.status.emit("[INFO] 正在读取配置...")
+        input_files = self.master.synth_files_list.toPlainText()
+        if input_files:
+            input_files = input_files.strip().split('\n')
+            srt_files = sorted([i for i in input_files if i.endswith('.srt')])
+            video_files = sorted([i for i in input_files if not i.endswith('.srt')])
+            if len(srt_files) != len(video_files):
+                self.status.emit("[ERROR] 字幕文件和视频文件数量不匹配，请重新选择文件！")
+                self.finished.emit()
+            
+            for idx, (input_file, input_srt) in enumerate(zip(video_files, srt_files)):
+                if not os.path.exists(input_file):
+                    self.status.emit(f"[ERROR] {input_file}文件不存在，请重新选择文件！")
+                    self.finished.emit()
+
+                if not os.path.exists(input_srt):
+                    self.status.emit(f"[ERROR] {input_srt}文件不存在，请重新选择文件！")
+                    self.finished.emit()
+
+                input_srt = shutil.copy(input_srt, 'project/cache/')
+
+                self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(video_files)}个")
+                import subprocess
+                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file,  '-vf', f'subtitles={input_srt}', '-c:v', 'libx264', '-c:a', 'copy', input_file+'_synth.mp4'])
+                self.pid.wait()
+                self.pid.kill()
+                self.pid.terminate()
+                self.status.emit("[INFO] 视频合成完成！")
+            
         self.finished.emit()
 
     def run(self):
@@ -580,6 +622,10 @@ class MainWorker(QObject):
                     self.pid.wait()
                     self.pid.kill()
                     self.pid.terminate()
+
+                if not os.path.exists(input_file+'.wav'):
+                    self.status.emit("[ERROR] 音频提取失败，请检查文件格式！")
+                    break
 
                 self.status.emit("[INFO] 正在进行语音识别...")
 
