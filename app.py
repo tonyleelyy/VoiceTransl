@@ -1,6 +1,6 @@
 import sys, os
 
-# os.chdir(sys._MEIPASS)
+os.chdir(sys._MEIPASS)
 import shutil
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
@@ -632,7 +632,7 @@ class MainWorker(QObject):
                 if whisper_file.startswith('ggml'):
                     self.pid = subprocess.Popen(['whisper/main', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file])
                 else:
-                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', language, '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav'])
+                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--beep_off', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', language, '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav'])
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
