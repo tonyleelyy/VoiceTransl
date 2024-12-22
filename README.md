@@ -2,7 +2,7 @@
 <h1><p align='center' >VoiceTransl</p></h1>
 <div align=center><img src="https://img.shields.io/github/v/release/shinnpuru/VoiceTransl"/>   <img src="https://img.shields.io/github/license/shinnpuru/VoiceTransl"/>   <img src="https://img.shields.io/github/stars/shinnpuru/VoiceTransl"/></div>
 
-VoiceTransl（原Galtransl for ASMR）是一个离线AI视频字幕生成和翻译软件，您可以使用本程序从外语音视频文件/字幕文件生成中文字幕文件。详细说明请见 [视频教程](https://www.bilibili.com/video/BV1ZoUYYXEio)。
+VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和翻译软件，从视频下载，音频提取，听写打轴，字幕翻译，视频合成各个环节为翻译者提供便利。详细说明请见 [视频教程](https://www.bilibili.com/video/BV1ZoUYYXEio)。
 
 <div align=center><img src="title.jpg" alt="title" style="width:512px;"/></div>
 
@@ -16,6 +16,7 @@ VoiceTransl（原Galtransl for ASMR）是一个离线AI视频字幕生成和翻�
 * 支持字典功能，可以自定义翻译字典，替换输入输出。
 * 支持从YouTube/Bilibili直接下载视频。
 * 支持文件和链接批量处理，自动识别文件类型。
+* 支持音频切分，字幕合并和视频合成。
 
 ## 下载
 
