@@ -8,6 +8,20 @@ from PyQt5.QtWidgets import QApplication, QVBoxLayout, QFileDialog, QFrame
 from qfluentwidgets import PushButton as QPushButton, TextEdit as QTextEdit, LineEdit as QLineEdit, ComboBox as QComboBox, Slider as QSlider, FluentWindow as QMainWindow
 from qfluentwidgets import FluentIcon, NavigationItemPosition, SubtitleLabel, TitleLabel, BodyLabel
 
+import re
+import json
+import subprocess
+from yt_dlp import YoutubeDL
+from bilibili_dl.bilibili_dl.Video import Video
+from bilibili_dl.bilibili_dl.downloader import download
+from bilibili_dl.bilibili_dl.utils import send_request
+from bilibili_dl.bilibili_dl.constants import URL_VIDEO_INFO
+
+from prompt2srt import make_srt, make_lrc
+from srt2prompt import make_prompt
+from prompt2srt import make_srt
+from GalTransl.__main__ import worker
+
 TRANSLATOR_SUPPORTED = [
     '不进行翻译',
     "sakura-009",
@@ -364,7 +378,6 @@ class MainWorker(QObject):
                 os.makedirs(os.path.join(*(input_file.split('.')[:-1])), exist_ok=True)
 
                 self.status.emit(f"[INFO] 正在进行音频提取...每{split_mode}秒分割一次")
-                import subprocess
                 self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file,  '-f', 'segment', '-segment_time', str(split_mode), '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', os.path.join(*(input_file.split('.')[:-1]+['%04d.wav']))])
                 self.pid.wait()
                 self.pid.kill()
@@ -385,7 +398,6 @@ class MainWorker(QObject):
                     self.finished.emit()
 
                 self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(input_files)}个")
-                from srt2prompt import make_prompt
                 prompt = make_prompt(input_file)
 
                 for i in prompt:
@@ -393,9 +405,7 @@ class MainWorker(QObject):
                     i['end'] += idx * split_mode
                     merged_prompt.append(i)
 
-            from prompt2srt import make_srt
             with open(input_files[0].replace('.srt','_merged.json'), 'w', encoding='utf-8') as f:
-                import json
                 json.dump(merged_prompt, f, ensure_ascii=False, indent=4)
             make_srt(input_files[0].replace('.srt','_merged.json'), input_files[0].replace('.srt','_merged.srt'))
             self.status.emit("[INFO] 所有文件处理完成！")
@@ -424,7 +434,6 @@ class MainWorker(QObject):
                 input_srt = shutil.copy(input_srt, 'project/cache/')
 
                 self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(video_files)}个")
-                import subprocess
                 self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file,  '-vf', f'subtitles={input_srt}', '-c:v', 'libx264', '-c:a', 'copy', input_file+'_synth.mp4'])
                 self.pid.wait()
                 self.pid.kill()
@@ -456,7 +465,6 @@ class MainWorker(QObject):
 
         self.status.emit("[INFO] 正在初始化项目文件夹...")
 
-        import os
         os.makedirs('project/cache', exist_ok=True)
         if before_dict:
             with open('project/项目字典_译前.txt', 'w', encoding='utf-8') as f:
@@ -487,7 +495,6 @@ class MainWorker(QObject):
         if yt_url:
             input_files.extend(yt_url.split('\n'))
 
-        import os
         os.makedirs('project/cache', exist_ok=True)
 
         self.status.emit("[INFO] 正在进行翻译配置...")
@@ -559,8 +566,6 @@ class MainWorker(QObject):
         for idx, input_file in enumerate(input_files):
             if not os.path.exists(input_file):
                 if 'youtu.be' in input_file or 'youtube.com' in input_file:
-                    from yt_dlp import YoutubeDL
-                    import os
                     if os.path.exists('project/YoutubeDL.webm'):
                         os.remove('project/YoutubeDL.webm')
                     with YoutubeDL({'proxy': proxy_address,'outtmpl': 'project/YoutubeDL.webm'}) as ydl:
@@ -570,10 +575,6 @@ class MainWorker(QObject):
                     input_file = 'project/YoutubeDL.webm'
 
                 elif 'BV' in yt_url:
-                    from bilibili_dl.bilibili_dl.Video import Video
-                    from bilibili_dl.bilibili_dl.downloader import download
-                    from bilibili_dl.bilibili_dl.utils import send_request
-                    from bilibili_dl.bilibili_dl.constants import URL_VIDEO_INFO
                     self.status.emit("[INFO] 正在下载视频...")
                     res = send_request(URL_VIDEO_INFO, params={'bvid': input_file})
                     download([Video(
@@ -584,7 +585,6 @@ class MainWorker(QObject):
                         cover_url=res['pic'] if res['videos'] == 1 else res['pages'][0]['pic'],
                     )], False)
                     self.status.emit("[INFO] 视频下载完成！")
-                    import re
                     title = res['title'] if res['videos'] == 1 else res['pages'][0]['part']
                     title = re.sub(r'[.:?/\\]', ' ', title).strip()
                     title = re.sub(r'\s+', ' ', title)
@@ -600,8 +600,6 @@ class MainWorker(QObject):
 
             self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(input_files)}个")
 
-            from prompt2srt import make_srt, make_lrc
-            from srt2prompt import make_prompt
             os.makedirs('project/gt_input', exist_ok=True)
             if input_file.endswith('.srt'):
                 self.status.emit("[INFO] 正在进行字幕转换...")
@@ -617,7 +615,6 @@ class MainWorker(QObject):
                     input_file = input_file[:-4]
                 else:
                     self.status.emit("[INFO] 正在进行音频提取...")
-                    import subprocess
                     self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'])
                     self.pid.wait()
                     self.pid.kill()
@@ -651,11 +648,9 @@ class MainWorker(QObject):
                     self.status.emit("[INFO] 未选择模型文件，跳过翻译步骤...")
                     continue
 
-                import subprocess
                 self.pid = subprocess.Popen(['llama/llama-server', '-m', 'llama/'+sakura_file, '-ngl' , str(sakura_mode), '--port', '8989'])
 
             self.status.emit("[INFO] 正在进行翻译...")
-            from GalTransl.__main__ import worker
             worker('project', 'config.yaml', translator, show_banner=False)
 
             self.status.emit("[INFO] 正在生成字幕文件...")
