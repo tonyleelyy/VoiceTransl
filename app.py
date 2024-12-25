@@ -28,6 +28,7 @@ TRANSLATOR_SUPPORTED = [
     "sakura-010",
     "index",
     "galtransl",
+    "qwen-local",
     "gpt-custom",
     "gpt35-1106",
     "gpt4-turbo",
@@ -237,12 +238,12 @@ class MainWindow(QMainWindow):
         
         self.settings_layout.addWidget(BodyLabel("🔢 离线模型参数（越大表示使用GPU越多）: "))
         self.sakura_value = QLineEdit()
-        self.sakura_value.setPlaceholderText("999")
+        self.sakura_value.setPlaceholderText("100")
         self.sakura_value.setReadOnly(True)
         self.settings_layout.addWidget(self.sakura_value)
         self.sakura_mode = QSlider(Qt.Horizontal)
-        self.sakura_mode.setRange(0, 999)
-        self.sakura_mode.setValue(999)
+        self.sakura_mode.setRange(0, 100)
+        self.sakura_mode.setValue(100)
         self.sakura_mode.valueChanged.connect(lambda: self.sakura_value.setText(str(self.sakura_mode.value())))
         self.settings_layout.addWidget(self.sakura_mode)
         
@@ -528,7 +529,7 @@ class MainWorker(QObject):
                     lines[idx+4] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://api.deepseek.com\n"
                     lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
-            if 'qwen' in translator:
+            if 'qwen2' in translator:
                 if 'GPT35:' in line:
                     lines[idx+4] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://dashscope.aliyuncs.com/compatible-mode\n"
@@ -551,7 +552,7 @@ class MainWorker(QObject):
                 if 'proxy' in line:
                     lines[idx+1] = f"  enableProxy: false\n"
 
-        if 'moonshot' in translator or 'qwen' in translator or 'glm' in translator or 'abab' in translator or 'gpt-custom' in translator or 'deepseek' in translator:
+        if 'moonshot' in translator or 'qwen2' in translator or 'glm' in translator or 'abab' in translator or 'gpt-custom' in translator or 'deepseek' in translator:
             translator = 'gpt35-1106'
         
         if 'index' in translator:
@@ -642,13 +643,13 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 翻译器未选择，跳过翻译步骤...")
                 continue
 
-            if 'sakura' in translator:
+            if 'sakura' in translator or 'qwen' in translator:
                 self.status.emit("[INFO] 正在启动Sakura翻译器...")
                 if not sakura_file:
                     self.status.emit("[INFO] 未选择模型文件，跳过翻译步骤...")
                     continue
 
-                self.pid = subprocess.Popen(['llama/llama-server', '-m', 'llama/'+sakura_file, '-ngl' , str(sakura_mode), '--port', '8989'])
+                self.pid = subprocess.Popen(['llama/llama-server', '-m', 'llama/'+sakura_file, '-ngl' , str(sakura_mode), '--port', '8989', '--no-context-shift'])
 
             self.status.emit("[INFO] 正在进行翻译...")
             worker('project', 'config.yaml', translator, show_banner=False)

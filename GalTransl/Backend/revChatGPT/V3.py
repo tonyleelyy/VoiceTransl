@@ -214,7 +214,7 @@ class Chatbot:
                 "n": kwargs.get("n", self.reply_count),
                 "user": role,
                 "max_tokens": self.get_max_tokens(convo_id=convo_id),
-            } if not 'qwen' in self.engine else {
+            } if not 'qwen2' in self.engine else {
                 "model": self.engine,
                 "messages": self.conversation[convo_id],
                 "stream": True,
@@ -308,7 +308,7 @@ class Chatbot:
                 "n": kwargs.get("n", self.reply_count),
                 "user": role,
                 "max_tokens": self.get_max_tokens(convo_id=convo_id),
-            } if not 'qwen' in self.engine else {
+            } if not 'qwen2' in self.engine else {
                 "model": self.engine,
                 "messages": self.conversation[convo_id],
                 "stream": True,
