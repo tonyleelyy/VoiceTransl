@@ -101,11 +101,11 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 
 4. 没有显卡可以用吗
 
-可以使用在线镜像进行运行，不需要显卡，详细请参考[镜像部署](https://www.codewithgpu.com/i/shinnpuru/GalTransl-for-ASMR/GalTransl-for-ASMR)。
+可以使用在线镜像进行运行，不需要显卡，手机也可以用，详细请参考[镜像部署](https://www.compshare.cn/images-detail?ImageID=compshareImage-16qc028dgfoh&ImageType=Community)。
 
 5. 不是Windows系统可以用吗
 
-Linux可以使用服务器部署进行运行，详细请参考[server分支](https://github.com/shinnpuru/GalTransl-for-ASMR/tree/server)。MacOS暂时不支持，用户可以使用[镜像部署](https://www.codewithgpu.com/i/shinnpuru/GalTransl-for-ASMR/GalTransl-for-ASMR)。
+Linux可以使用服务器部署进行运行，详细请参考[server分支](https://github.com/shinnpuru/GalTransl-for-ASMR/tree/server)。MacOS暂时不支持，用户可以使用[镜像部署](https://www.compshare.cn/images-detail?ImageID=compshareImage-16qc028dgfoh&ImageType=Community)。
 
 ## 开发
 
