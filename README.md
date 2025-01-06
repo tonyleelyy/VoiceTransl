@@ -65,23 +65,23 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 
 2. 本地翻译模型基于[llama.cpp](https://github.com/ggerganov/llama.cpp)引擎，已经为Vulkan编译配置好。
 
-模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。
+模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。选择模型的时候请使用对应代码。
 
 日语
 
-| 模型  | 磁盘    | 显存     | 链接 |
-| ------ | ------- | ------- | ----- |
-| [Index-1.9B-Q4](https://github.com/bilibili/Index-1.9B)  | ~1 GiB | ~4G | [下载](https://huggingface.co/IndexTeam/Index-1.9B-Chat-GGUF) |
-| [Sakura-7B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM)  | ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-7B-Qwen2.5-v1.0-GGUF) |
-| [GalTransl-7B-v2.6-Q4](https://github.com/xd2333/GalTransl) | ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/GalTransl-7B-v2.6) |
-| [Sakura-14B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM)  | ~9 GiB | ~16 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF) |
+| 名称 | 代码 | 磁盘    | 显存     | 链接 |
+| ------ | ------ |  ------- | ------- | ----- |
+| [Index-1.9B-Q4](https://github.com/bilibili/Index-1.9B)  | index |  ~1 GiB | ~4G | [下载](https://huggingface.co/IndexTeam/Index-1.9B-Chat-GGUF) |
+| [Sakura-7B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM)  | sakura-010 |  ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-7B-Qwen2.5-v1.0-GGUF) |
+| [GalTransl-7B-v2.6-Q4](https://github.com/xd2333/GalTransl) | galtransl | ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/GalTransl-7B-v2.6) |
+| [Sakura-14B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM)  |  sakura-010 | ~9 GiB | ~16 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF) |
 
 英语
 
-| 模型  | 磁盘    | 显存     | 链接 |
-| ------ | ------- | ------- | ----- |
-| [Qwen-2.5-7B-Q4](https://github.com/QwenLM/Qwen2.5)  | ~5 GiB | ~8 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF) |
-| [Qwen-2.5-14B-Q4](https://github.com/QwenLM/Qwen2.5)  | ~9 GiB | ~16 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF) |
+| 名称  |  代码  | 磁盘    | 显存     | 链接 |
+| ------ |  ------ | ------- | ------- | ----- |
+| [Qwen-2.5-7B-Q4](https://github.com/QwenLM/Qwen2.5)  |  qwen-local | ~5 GiB | ~8 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF) |
+| [Qwen-2.5-14B-Q4](https://github.com/QwenLM/Qwen2.5)  |  qwen-local | ~9 GiB | ~16 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF) |
 
 3. 如果需要使用Ollama或者其他本地模型引擎，请使用gpt-custom接口，配置自定义OpenAI地址为`http://localhost:11434`，并填写自定义OpenAI模型。具体请参考[OpenAI兼容性](https://ollama.com/blog/openai-compatibility).
 
