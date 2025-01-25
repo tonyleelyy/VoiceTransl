@@ -628,7 +628,7 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 正在进行语音识别...")
 
                 if whisper_file.startswith('ggml'):
-                    self.pid = subprocess.Popen(['whisper/main', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file])
+                    self.pid = subprocess.Popen(['whisper/whisper-cli', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file])
                 else:
                     self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--beep_off', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', language, '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav'])
                 self.pid.wait()

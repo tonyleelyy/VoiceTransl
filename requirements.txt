@@ -1,4 +1,4 @@
-httpx
+httpx<0.28
 opencc
 packaging
 prompt_toolkit
