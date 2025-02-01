@@ -190,17 +190,19 @@ class MainWindow(QMainWindow):
         self.settings_layout = self.settings_tab.vBoxLayout
 
         self.settings_layout.addWidget(TitleLabel("⚙️ 设置"))
+        self.settings_layout.addWidget(BodyLabel("（1）仅下载模式：选择不进行听写和不进行翻译；（2）仅听写模式：选择不进行翻译；（3）仅翻译模式：上传SRT文件；（4）完整模式：选择所有功能。"))
         
         # Proxy Section
-        self.settings_layout.addWidget(BodyLabel("🌐 代理设置：设置代理地址以便下载视频。"))
+        self.settings_layout.addWidget(BodyLabel("🌐 代理设置：设置代理地址以便下载视频和翻译。"))
         self.proxy_address = QLineEdit()
         self.proxy_address.setPlaceholderText("例如：http://127.0.0.1:7890，留空为不使用")
         self.settings_layout.addWidget(self.proxy_address)
         
         # Whisper Section
-        self.settings_layout.addWidget(BodyLabel("🗣️ 语音识别AI模型：选择用于语音识别的 Whisper 模型文件。（必选）"))
+        self.settings_layout.addWidget(SubtitleLabel("🗣️ 语音识别"))
+        self.settings_layout.addWidget(BodyLabel("选择用于语音识别的模型文件。（必选）"))
         self.whisper_file = QComboBox()
-        whisper_lst = [i for i in os.listdir('whisper') if i.startswith('ggml') and i.endswith('bin')] + [i for i in os.listdir('whisper-faster') if i.startswith('faster-whisper')]
+        whisper_lst = [i for i in os.listdir('whisper') if i.startswith('ggml') and i.endswith('bin')] + [i for i in os.listdir('whisper-faster') if i.startswith('faster-whisper')] + ['不进行听写']
         self.whisper_file.addItems(whisper_lst)
         self.settings_layout.addWidget(self.whisper_file)
 
@@ -210,33 +212,34 @@ class MainWindow(QMainWindow):
         self.settings_layout.addWidget(self.input_lang)
         
         # Translator Section
-        self.settings_layout.addWidget(BodyLabel("🌍 翻译AI模型：选择用于翻译的模型类别。（必选）"))
+        self.settings_layout.addWidget(SubtitleLabel("🌍 字幕翻译"))
+        self.settings_layout.addWidget(BodyLabel("选择用于字幕翻译的模型类别。（必选）"))
         self.translator_group = QComboBox()
         self.translator_group.addItems(TRANSLATOR_SUPPORTED)
         self.settings_layout.addWidget(self.translator_group)
         
-        self.settings_layout.addWidget(BodyLabel("🔑 在线模型令牌"))
+        self.settings_layout.addWidget(BodyLabel("在线模型令牌（如果选择在线模型）"))
         self.gpt_token = QLineEdit()
         self.gpt_token.setPlaceholderText("留空为使用上次配置的Token。")
         self.settings_layout.addWidget(self.gpt_token)
 
-        self.settings_layout.addWidget(BodyLabel("🌌 自定义OpenAI地址 (gpt-custom)"))
+        self.settings_layout.addWidget(BodyLabel("自定义OpenAI地址 (请选择gpt-custom，支持本地或在线OpenAI接口)"))
         self.gpt_address = QLineEdit()
         self.gpt_address.setPlaceholderText("例如：http://127.0.0.1:11434")
         self.settings_layout.addWidget(self.gpt_address)
 
-        self.settings_layout.addWidget(BodyLabel("📄 自定义OpenAI模型 (gpt-custom)"))
+        self.settings_layout.addWidget(BodyLabel("自定义OpenAI模型 (请选择gpt-custom，支持本地或在线OpenAI接口)"))
         self.gpt_model = QLineEdit()
         self.gpt_model.setPlaceholderText("例如：qwen2.5")
         self.settings_layout.addWidget(self.gpt_model)
         
-        self.settings_layout.addWidget(BodyLabel("📦 离线模型文件"))
+        self.settings_layout.addWidget(BodyLabel("离线模型文件（如果选择离线模型）"))
         self.sakura_file = QComboBox()
         sakura_lst = [i for i in os.listdir('llama') if i.endswith('gguf')]
         self.sakura_file.addItems(sakura_lst)
         self.settings_layout.addWidget(self.sakura_file)
         
-        self.settings_layout.addWidget(BodyLabel("🔢 离线模型参数（越大表示使用GPU越多）: "))
+        self.settings_layout.addWidget(BodyLabel("离线模型参数（越大表示使用GPU越多）: "))
         self.sakura_value = QLineEdit()
         self.sakura_value.setPlaceholderText("100")
         self.sakura_value.setReadOnly(True)
@@ -257,7 +260,7 @@ class MainWindow(QMainWindow):
 
         # Split Section
         self.tool_layout.addWidget(SubtitleLabel("🔪 音频分割工具"))
-        self.tool_layout.addWidget(BodyLabel("拖拽文件到下方框内，点击运行即可，每个文件生成一个文件夹。数字代表每段音频的长度（秒）。"))
+        self.tool_layout.addWidget(BodyLabel("拖拽文件到下方框内，点击运行即可，每个文件生成一个文件夹，滑动条数字代表切割每段音频的长度（秒）。"))
         self.split_value = QLineEdit()
         self.split_value.setPlaceholderText("600")
         self.split_value.setReadOnly(True)
@@ -280,7 +283,7 @@ class MainWindow(QMainWindow):
 
         # Merge Section
         self.tool_layout.addWidget(SubtitleLabel("🔗 字幕合并工具"))
-        self.tool_layout.addWidget(BodyLabel("拖拽字幕文件到下方框内，点击运行即可，每次合并一个文件。时间戳按照分割的时间累加。"))
+        self.tool_layout.addWidget(BodyLabel("拖拽多个字幕文件到下方框内，点击运行即可，每次合并成一个文件。时间戳按照上面滑动条分割的时间累加。"))
         self.merge_files_list = QTextEdit()
         self.merge_files_list.setAcceptDrops(True)
         self.merge_files_list.dropEvent = lambda e: self.merge_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
@@ -629,8 +632,11 @@ class MainWorker(QObject):
 
                 if whisper_file.startswith('ggml'):
                     self.pid = subprocess.Popen(['whisper/whisper-cli', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file])
-                else:
+                elif whisper_file.startswith('faster-whisper'):
                     self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--beep_off', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', language, '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav'])
+                else:
+                    self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
+                    continue
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
