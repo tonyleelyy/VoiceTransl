@@ -24,17 +24,7 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 
 ## 听写
 
-* NVIDIA推荐使用[faster-whisper](https://github.com/Purfview/whisper-standalone-win)模型，支持更高的准确率。请根据[配置要求](whisper-faster/README.md)准备DLL和EXE文件。
-
-模型需要自行下载，请选择合适的模型下载然后放到`whisper-faster`文件夹。
-
-| 名称  | 磁盘    | 显存     | 链接 |
-| ------ | ------- | ------- | ----- |
-| faster-whisper-small  | 463 MiB | ~1 GB | [下载](https://huggingface.co/Systran/faster-whisper-small) |
-| faster-whisper-medium | 1.42 GiB | ~2 GB | [下载](https://huggingface.co/Systran/faster-whisper-medium) |
-| faster-whisper-large-v2  | 2.87 GiB | ~3 GB | [下载](https://huggingface.co/Systran/faster-whisper-large-v2) |
-
-* AMD/Intel推荐使用[whisper.cpp](https://github.com/ggerganov/whisper.cpp)模型，支持更高的兼容性，引擎已经为Vulkan编译配置好。
+本项目使用[whisper.cpp](https://github.com/ggerganov/whisper.cpp)模型，支持更高的兼容性，引擎已经为Vulkan编译配置好。
 
 模型需要自行下载，请选择合适的模型下载然后放到`whisper`文件夹。
 
@@ -44,12 +34,21 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 | ggml-medium.bin | 1.5 GiB | ~2.1 GB | [下载](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin?download=true) |
 | ggml-large-v2.bin  | 2.9 GiB | ~3.9 GB | [下载](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2.bin?download=true) |
 
+NVIDIA显卡可以使用[faster-whisper](https://github.com/Purfview/whisper-standalone-win)模型，支持更高的速度和VAD功能。请根据[配置要求](whisper-faster/README.md)准备DLL和EXE文件。
+
+模型需要自行下载，请选择合适的模型下载然后放到`whisper-faster`文件夹。
+
+| 名称  | 磁盘    | 显存     | 链接 |
+| ------ | ------- | ------- | ----- |
+| faster-whisper-small  | 463 MiB | ~1 GB | [下载](https://huggingface.co/Systran/faster-whisper-small) |
+| faster-whisper-medium | 1.42 GiB | ~2 GB | [下载](https://huggingface.co/Systran/faster-whisper-medium) |
+| faster-whisper-large-v2  | 2.87 GiB | ~3 GB | [下载](https://huggingface.co/Systran/faster-whisper-large-v2) |
+
 ## 翻译
 
-1. 在线模型支持任意的OpenAI兼容接口，以及国内各大模型。具体列表如下：
+1. 在线翻译模型支持任意的OpenAI兼容接口，以及国内各大模型。使用时请填写API密钥。具体列表如下：
 
 ```
-    "gpt-custom",
     "gpt35-1106",
     "gpt4-turbo",
     "moonshot-v1-8k",
@@ -63,9 +62,13 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
     "abab6.5s-chat",
 ```
 
+* 转发模型可以使用`gpt-custom`，配置自定义OpenAI地址，并填写自定义OpenAI模型。
+
 2. 本地翻译模型基于[llama.cpp](https://github.com/ggerganov/llama.cpp)引擎，已经为Vulkan编译配置好。
 
-模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。选择模型的时候请使用对应代码。
+* NVIDIA显卡可以使用为[CUDA编译的版本](https://github.com/ggerganov/llama.cpp/releases/latest)，支持更高的速度和显存占用，请解压到`llama`文件夹覆盖原有文件。
+
+* 模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。选择模型的时候请使用对应代码。
 
 日语
 
@@ -83,13 +86,23 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 | [Qwen-2.5-7B-Q4](https://github.com/QwenLM/Qwen2.5)  |  qwen-local | ~5 GiB | ~8 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF) |
 | [Qwen-2.5-14B-Q4](https://github.com/QwenLM/Qwen2.5)  |  qwen-local | ~9 GiB | ~16 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF) |
 
-3. 如果需要使用Ollama或者其他本地模型引擎，请使用gpt-custom接口，配置自定义OpenAI地址为`http://localhost:11434`，并填写自定义OpenAI模型。具体请参考[OpenAI兼容性](https://ollama.com/blog/openai-compatibility).
+* 本项目也支持Ollama引擎，请使用gpt-custom接口，配置自定义OpenAI地址为`http://localhost:11434`，并填写自定义OpenAI模型。具体请参考[OpenAI兼容性](https://ollama.com/blog/openai-compatibility).
+
+## 模式
+
+本软件支持四种模式，分别是下载模式，翻译模式，听写模式和完整模式。
+
+1. 下载模式：支持从YouTube/Bilibili直接下载视频。请填写视频链接，语音识别选择不进行听写，字幕翻译选择不进行翻译，然后点击运行按钮。
+2. 翻译模式：支持字幕翻译，支持多种翻译模型。请填写字幕文件，语音识别选择不进行听写，字幕翻译选择模型，然后点击运行按钮。
+3. 听写模式：支持音频听写，支持多种听写模型。请填写音视频文件或视频链接，语音识别选择模型，字幕翻译选择不进行翻译，然后点击运行按钮。
+4. 完整模式：支持从下载到翻译的完整流程。请填写音视频文件或视频链接，语音识别选择模型，字幕翻译选择模型，然后点击运行按钮。
 
 ## 常见问题
 
-1. All connection attempts failed
+1. 翻译时提示网络连接错误
 
-在线模型请检查网络连接是否正常，或者尝试更换代理。离线模型出现连接错误，先检查是否超显存，把离线参数从0开始逐步增加10；然后确认关闭所有的代理软件，在系统设置-网络和Internet-代理里面应该是空的。
+* 在线模型请检查网络连接是否正常，或者尝试更换代理。
+* 离线模型出现连接错误，先检查是否超显存，把离线参数从0开始逐步增加10；然后确认关闭所有的代理软件，在系统设置-网络和Internet-代理里面应该是空的。
 
 2. 多次使用之后闪退
 
@@ -99,13 +112,13 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 
 请检查系统编码是否为UTF-8，Windows控制面板-区域-更改日期、时间或数字格式-管理-更改系统区域设置-使用UTF-8提供全球语言支持。
 
-4. 没有显卡可以用吗
-
-可以使用在线镜像进行运行，不需要显卡，手机也可以用，详细请参考[镜像部署](https://www.compshare.cn/images-detail?ImageID=compshareImage-16qc028dgfoh&ImageType=Community)。
-
-5. 不是Windows系统可以用吗
+4. 不是Windows系统可以用吗
 
 Linux可以使用服务器部署进行运行，详细请参考[server分支](https://github.com/shinnpuru/GalTransl-for-ASMR/tree/server)。MacOS暂时不支持，用户可以使用[镜像部署](https://www.compshare.cn/images-detail?ImageID=compshareImage-16qc028dgfoh&ImageType=Community)。
+
+5. 没有显卡/手机可以用吗
+
+可以使用在线镜像进行运行，不需要显卡，手机也可以用，详细请参考[镜像部署](https://www.compshare.cn/images-detail?ImageID=compshareImage-16qc028dgfoh&ImageType=Community)。
 
 ## 开发
 
