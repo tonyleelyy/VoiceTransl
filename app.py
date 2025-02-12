@@ -2,7 +2,7 @@ import sys, os
 
 os.chdir(sys._MEIPASS)
 import shutil
-from PyQt5 import QtGui
+from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
 from PyQt5.QtWidgets import QApplication, QVBoxLayout, QFileDialog, QFrame
 from qfluentwidgets import PushButton as QPushButton, TextEdit as QTextEdit, LineEdit as QLineEdit, ComboBox as QComboBox, Slider as QSlider, FluentWindow as QMainWindow
@@ -24,11 +24,6 @@ from GalTransl.__main__ import worker
 
 TRANSLATOR_SUPPORTED = [
     '不进行翻译',
-    "sakura-009",
-    "sakura-010",
-    "index",
-    "galtransl",
-    "qwen-local",
     "gpt-custom",
     "gpt35-1106",
     "gpt4-turbo",
@@ -41,6 +36,15 @@ TRANSLATOR_SUPPORTED = [
     "qwen2-72b-instruct",
     "abab6.5-chat",
     "abab6.5s-chat",
+]
+
+TRANSLATOR_SUPPORTED_LOCAL = [
+    '不进行翻译',
+    "sakura-009",
+    "sakura-010",
+    "index",
+    "galtransl",
+    "qwen-local",
 ]
 
 class Widget(QFrame):
@@ -70,6 +74,7 @@ class MainWindow(QMainWindow):
     def initUI(self):
         self.initInputOutputTab()
         self.initSettingsTab()
+        self.initAdvancedSettingTab()
         self.initDictTab()
         self.initToolTab()
         self.initAboutTab()
@@ -87,16 +92,26 @@ class MainWindow(QMainWindow):
                 sakura_file = lines[6].strip()
                 sakura_mode = int(lines[7].strip())
                 proxy_address = lines[8].strip()
+                translator_local = lines[9].strip()
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
+                self.translator_group_local.setCurrentText(translator_local)
                 self.input_lang.setCurrentText(language)
                 self.gpt_token.setText(gpt_token)
                 self.gpt_address.setText(gpt_address)
                 self.gpt_model.setText(gpt_model)
-                self.sakura_file.setCurrentText(sakura_file)
+                if self.sakura_file: self.sakura_file.setCurrentText(sakura_file)
                 self.sakura_mode.setValue(sakura_mode)
                 self.proxy_address.setText(proxy_address)
+
+        if os.path.exists('whisper/param.txt'):
+            with open('whisper/param.txt', 'r', encoding='utf-8') as f:
+                self.param_whisper.setPlainText(f.read())
+
+        if os.path.exists('llama/param.txt'):
+            with open('llama/param.txt', 'r', encoding='utf-8') as f:
+                self.param_llama.setPlainText(f.read())
 
     def initAboutTab(self):
         self.about_tab = Widget("About", self)
@@ -108,6 +123,16 @@ class MainWindow(QMainWindow):
         self.introduce_text.setReadOnly(True)
         self.introduce_text.setPlainText("VoiceTransl（原Galtransl for ASMR）是一个离线AI视频字幕生成和翻译软件，您可以使用本程序从外语音视频文件/字幕文件生成中文字幕文件。项目地址及使用说明: https://github.com/shinnpuru/VoiceTransl。")
         self.about_layout.addWidget(self.introduce_text)
+
+        # mode
+        self.about_layout.addWidget(TitleLabel("🔧 模式说明"))
+        self.mode_text = QTextEdit()
+        self.mode_text.setReadOnly(True)
+        self.mode_text.setPlainText("""（1）仅下载模式：选择不进行听写和不进行翻译；
+（2）仅听写模式：选择不进行翻译，并且选择听写模型；
+（3）仅翻译模式：上传SRT文件，并且选择翻译模型；  
+（4）完整模式：选择所有功能。   """)
+        self.about_layout.addWidget(self.mode_text)
 
         # disclaimer
         self.about_layout.addWidget(TitleLabel("⚠️ 免责声明"))
@@ -122,14 +147,8 @@ class MainWindow(QMainWindow):
         self.input_output_tab = Widget("Home", self)
         self.input_output_layout = self.input_output_tab.vBoxLayout
         
-        self.input_output_layout.addWidget(TitleLabel("🎉 欢迎使用VoiceTransl！"))
-        
         # Input Section
-        self.input_file_button = QPushButton("📂 请选择音视频文件/SRT文件或拖拽文件到窗口（可多选）。")
-        self.input_file_button.clicked.connect(self.select_input)
-        self.input_output_layout.addWidget(self.input_file_button)
-
-        # Input Files List
+        self.input_output_layout.addWidget(BodyLabel("📂 请拖拽音视频文件/SRT文件到这里（可多选）。"))
         self.input_files_list = QTextEdit()
         self.input_files_list.setAcceptDrops(True)
         self.input_files_list.dropEvent = lambda e: self.input_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
@@ -142,6 +161,12 @@ class MainWindow(QMainWindow):
         self.yt_url.setAcceptDrops(False)
         self.yt_url.setPlaceholderText("例如：https://www.youtube.com/watch?v=...\n例如：BV1Lxt5e8EJF")
         self.input_output_layout.addWidget(self.yt_url)
+
+        # Proxy Section
+        self.input_output_layout.addWidget(BodyLabel("🌐 设置代理地址以便下载视频和翻译。"))
+        self.proxy_address = QLineEdit()
+        self.proxy_address.setPlaceholderText("例如：http://127.0.0.1:7890，留空为不使用")
+        self.input_output_layout.addWidget(self.proxy_address)
 
         self.run_button = QPushButton("🚀 运行")
         self.run_button.clicked.connect(self.run_worker)
@@ -167,18 +192,17 @@ class MainWindow(QMainWindow):
         self.dict_tab = Widget("Dict", self)
         self.dict_layout = self.dict_tab.vBoxLayout
 
-        self.dict_layout.addWidget(TitleLabel("📚 字典配置"))
-        self.dict_layout.addWidget(BodyLabel("配置翻译前的字典。"))
+        self.dict_layout.addWidget(BodyLabel("📚 配置翻译前的字典。"))
         self.before_dict = QTextEdit()
         self.before_dict.setPlaceholderText("日文\t日文\n日文\t日文")
         self.dict_layout.addWidget(self.before_dict)
         
-        self.dict_layout.addWidget(BodyLabel("配置翻译中的字典。"))
+        self.dict_layout.addWidget(BodyLabel("📚 配置翻译中的字典。"))
         self.gpt_dict = QTextEdit()
         self.gpt_dict.setPlaceholderText("日文\t中文\n日文\t中文")
         self.dict_layout.addWidget(self.gpt_dict)
         
-        self.dict_layout.addWidget(BodyLabel("配置翻译后的字典。"))
+        self.dict_layout.addWidget(BodyLabel("📚 配置翻译后的字典。"))
         self.after_dict = QTextEdit()
         self.after_dict.setPlaceholderText("中文\t中文\n中文\t中文")
         self.dict_layout.addWidget(self.after_dict)
@@ -188,19 +212,9 @@ class MainWindow(QMainWindow):
     def initSettingsTab(self):
         self.settings_tab = Widget("Settings", self)
         self.settings_layout = self.settings_tab.vBoxLayout
-
-        self.settings_layout.addWidget(TitleLabel("⚙️ 设置"))
-        self.settings_layout.addWidget(BodyLabel("（1）仅下载模式：选择不进行听写和不进行翻译；（2）仅听写模式：选择不进行翻译；（3）仅翻译模式：上传SRT文件；（4）完整模式：选择所有功能。"))
-        
-        # Proxy Section
-        self.settings_layout.addWidget(BodyLabel("🌐 代理设置：设置代理地址以便下载视频和翻译。"))
-        self.proxy_address = QLineEdit()
-        self.proxy_address.setPlaceholderText("例如：http://127.0.0.1:7890，留空为不使用")
-        self.settings_layout.addWidget(self.proxy_address)
         
         # Whisper Section
-        self.settings_layout.addWidget(SubtitleLabel("🗣️ 语音识别"))
-        self.settings_layout.addWidget(BodyLabel("选择用于语音识别的模型文件。（必选）"))
+        self.settings_layout.addWidget(BodyLabel("🗣️ 选择用于语音识别的模型文件。"))
         self.whisper_file = QComboBox()
         whisper_lst = [i for i in os.listdir('whisper') if i.startswith('ggml') and i.endswith('bin')] + [i for i in os.listdir('whisper-faster') if i.startswith('faster-whisper')] + ['不进行听写']
         self.whisper_file.addItems(whisper_lst)
@@ -210,10 +224,9 @@ class MainWindow(QMainWindow):
         self.input_lang = QComboBox()
         self.input_lang.addItems(['ja','en','ko','ru','fr'])
         self.settings_layout.addWidget(self.input_lang)
-        
+
         # Translator Section
-        self.settings_layout.addWidget(SubtitleLabel("🌍 字幕翻译"))
-        self.settings_layout.addWidget(BodyLabel("选择用于字幕翻译的模型类别。（必选）"))
+        self.settings_layout.addWidget(BodyLabel("🌍 选择用于在线翻译的模型类别。"))
         self.translator_group = QComboBox()
         self.translator_group.addItems(TRANSLATOR_SUPPORTED)
         self.settings_layout.addWidget(self.translator_group)
@@ -232,6 +245,11 @@ class MainWindow(QMainWindow):
         self.gpt_model = QLineEdit()
         self.gpt_model.setPlaceholderText("例如：qwen2.5")
         self.settings_layout.addWidget(self.gpt_model)
+
+        self.settings_layout.addWidget(BodyLabel("💻 选择用于离线翻译的模型类别。"))
+        self.translator_group_local = QComboBox()
+        self.translator_group_local.addItems(TRANSLATOR_SUPPORTED_LOCAL)
+        self.settings_layout.addWidget(self.translator_group_local)
         
         self.settings_layout.addWidget(BodyLabel("离线模型文件（如果选择离线模型）"))
         self.sakura_file = QComboBox()
@@ -249,18 +267,31 @@ class MainWindow(QMainWindow):
         self.sakura_mode.setValue(100)
         self.sakura_mode.valueChanged.connect(lambda: self.sakura_value.setText(str(self.sakura_mode.value())))
         self.settings_layout.addWidget(self.sakura_mode)
+
+        self.addSubInterface(self.settings_tab, FluentIcon.SETTING, "基础设置", NavigationItemPosition.TOP)
+
+    def initAdvancedSettingTab(self):
+        self.advanced_settings_tab = Widget("AdvancedSettings", self)
+        self.advanced_settings_layout = self.advanced_settings_tab.vBoxLayout
         
-        self.addSubInterface(self.settings_tab, FluentIcon.SETTING, "设置", NavigationItemPosition.TOP)
+        self.advanced_settings_layout.addWidget(BodyLabel("🔧 输入额外的Whisper命令行参数。"))
+        self.param_whisper = QTextEdit()
+        self.param_whisper.setPlaceholderText("每个参数单独一行，请参考Whisper.cpp和Faster-Whisper文档，不清楚请保持默认。")
+        self.advanced_settings_layout.addWidget(self.param_whisper)
+
+        self.advanced_settings_layout.addWidget(BodyLabel("🔧 输入额外的Llama.cpp命令行参数。"))
+        self.param_llama = QTextEdit()
+        self.param_llama.setPlaceholderText("每个参数单独一行，请参考Llama.cpp文档，不清楚请保持默认。")
+        self.advanced_settings_layout.addWidget(self.param_llama)
+
+        self.addSubInterface(self.advanced_settings_tab, FluentIcon.ASTERISK, "高级设置", NavigationItemPosition.TOP)
 
     def initToolTab(self):
         self.tool_tab = Widget("Tool", self)
         self.tool_layout = self.tool_tab.vBoxLayout
 
-        self.tool_layout.addWidget(TitleLabel("🛠️ 工具"))
-
         # Split Section
-        self.tool_layout.addWidget(SubtitleLabel("🔪 音频分割工具"))
-        self.tool_layout.addWidget(BodyLabel("拖拽文件到下方框内，点击运行即可，每个文件生成一个文件夹，滑动条数字代表切割每段音频的长度（秒）。"))
+        self.tool_layout.addWidget(BodyLabel("🔪 分割合并工具"))
         self.split_value = QLineEdit()
         self.split_value.setPlaceholderText("600")
         self.split_value.setReadOnly(True)
@@ -271,37 +302,32 @@ class MainWindow(QMainWindow):
         self.split_mode.valueChanged.connect(lambda: self.split_value.setText(str(self.split_mode.value())))
         self.tool_layout.addWidget(self.split_mode)
 
-
         self.split_files_list = QTextEdit()
         self.split_files_list.setAcceptDrops(True)
         self.split_files_list.dropEvent = lambda e: self.split_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
-        self.split_files_list.setPlaceholderText("当前未选择本地文件...")
+        self.split_files_list.setPlaceholderText("拖拽文件到方框内，点击运行即可，每个文件生成一个文件夹，滑动条数字代表切割每段音频的长度（秒）。")
         self.tool_layout.addWidget(self.split_files_list)
-        self.run_split_button = QPushButton("🚀 运行")
+        self.run_split_button = QPushButton("🚀 分割")
         self.run_split_button.clicked.connect(self.run_split)
         self.tool_layout.addWidget(self.run_split_button)
 
-        # Merge Section
-        self.tool_layout.addWidget(SubtitleLabel("🔗 字幕合并工具"))
-        self.tool_layout.addWidget(BodyLabel("拖拽多个字幕文件到下方框内，点击运行即可，每次合并成一个文件。时间戳按照上面滑动条分割的时间累加。"))
         self.merge_files_list = QTextEdit()
         self.merge_files_list.setAcceptDrops(True)
         self.merge_files_list.dropEvent = lambda e: self.merge_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
-        self.merge_files_list.setPlaceholderText("当前未选择本地文件...")
+        self.merge_files_list.setPlaceholderText("拖拽多个字幕文件到方框内，点击运行即可，每次合并成一个文件。时间戳按照上面滑动条分割的时间累加。")
         self.tool_layout.addWidget(self.merge_files_list)
-        self.run_merge_button = QPushButton("🚀 运行")
+        self.run_merge_button = QPushButton("🚀 合并")
         self.run_merge_button.clicked.connect(self.run_merge)
         self.tool_layout.addWidget(self.run_merge_button)
 
         # Merge Section
-        self.tool_layout.addWidget(SubtitleLabel("💾 视频合成工具"))
-        self.tool_layout.addWidget(BodyLabel("拖拽字幕文件和视频文件到下方框内，点击运行即可。字幕和视频文件需要一一对应，例如output.mp4和output.mp4.srt。"))
+        self.tool_layout.addWidget(BodyLabel("💾 字幕合成工具"))
         self.synth_files_list = QTextEdit()
         self.synth_files_list.setAcceptDrops(True)
         self.synth_files_list.dropEvent = lambda e: self.synth_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
-        self.synth_files_list.setPlaceholderText("当前未选择本地文件...")
+        self.synth_files_list.setPlaceholderText("拖拽字幕文件和视频文件到下方框内，点击运行即可。字幕和视频文件需要一一对应，例如output.mp4和output.mp4.srt。")
         self.tool_layout.addWidget(self.synth_files_list)
-        self.run_synth_button = QPushButton("🚀 运行")
+        self.run_synth_button = QPushButton("🚀 合成")
         self.run_synth_button.clicked.connect(self.run_synth)
         self.tool_layout.addWidget(self.run_synth_button)
         
@@ -452,6 +478,7 @@ class MainWorker(QObject):
         yt_url = self.master.yt_url.toPlainText()
         whisper_file = self.master.whisper_file.currentText()
         translator = self.master.translator_group.currentText()
+        translator_local = self.master.translator_group_local.currentText()
         language = self.master.input_lang.currentText()
         gpt_token = self.master.gpt_token.text()
         gpt_address = self.master.gpt_address.text()
@@ -462,10 +489,20 @@ class MainWorker(QObject):
         before_dict = self.master.before_dict.toPlainText()
         gpt_dict = self.master.gpt_dict.toPlainText()
         after_dict = self.master.after_dict.toPlainText()
+        param_whisper = self.master.param_whisper.toPlainText()
+        param_llama = self.master.param_llama.toPlainText()
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n")
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{translator_local}\n")
+
+        with open('whisper/param.txt', 'w', encoding='utf-8') as f:
+            f.write(param_whisper)
+
+        with open('llama/param.txt', 'w', encoding='utf-8') as f:
+            f.write(param_llama)
+
+        translator = translator if translator != '不进行翻译' else translator_local
 
         self.status.emit("[INFO] 正在初始化项目文件夹...")
 
@@ -611,9 +648,9 @@ class MainWorker(QObject):
                 make_prompt(input_file, output_file_path)
                 self.status.emit("[INFO] 字幕转换完成！")
             else:
-                if not whisper_file:
-                    self.status.emit("[INFO] 未选择语音识别模型文件，请重新配置...")
-                    break
+                if whisper_file == '不进行听写':
+                    self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
+                    continue
 
                 if input_file.endswith('.wav'):
                     input_file = input_file[:-4]
@@ -631,9 +668,9 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 正在进行语音识别...")
 
                 if whisper_file.startswith('ggml'):
-                    self.pid = subprocess.Popen(['whisper/whisper-cli', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file])
+                    self.pid = subprocess.Popen(['whisper/whisper-cli', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file]+param_whisper.split())
                 elif whisper_file.startswith('faster-whisper'):
-                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--beep_off', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', language, '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav'])
+                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--beep_off', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', language, '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav']+param_whisper.split())
                 else:
                     self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
                     continue
@@ -655,7 +692,7 @@ class MainWorker(QObject):
                     self.status.emit("[INFO] 未选择模型文件，跳过翻译步骤...")
                     continue
 
-                self.pid = subprocess.Popen(['llama/llama-server', '-m', 'llama/'+sakura_file, '-ngl' , str(sakura_mode), '--port', '8989', '--no-context-shift'])
+                self.pid = subprocess.Popen(['llama/llama-server', '-m', 'llama/'+sakura_file, '-ngl' , str(sakura_mode), '--port', '8989']+param_llama.split())
 
             self.status.emit("[INFO] 正在进行翻译...")
             worker('project', 'config.yaml', translator, show_banner=False)
@@ -673,6 +710,7 @@ class MainWorker(QObject):
         self.finished.emit()
 
 if __name__ == "__main__":
+    QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
     app = QApplication(sys.argv)
     main_window = MainWindow()
     main_window.show()
