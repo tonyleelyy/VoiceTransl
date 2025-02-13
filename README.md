@@ -42,7 +42,7 @@ NVIDIA显卡可以使用[faster-whisper](https://github.com/Purfview/whisper-sta
 | ------ | ------- | ------- | ----- |
 | faster-whisper-small  | 463 MiB | ~1 GB | [下载](https://huggingface.co/Systran/faster-whisper-small) |
 | faster-whisper-medium | 1.42 GiB | ~2 GB | [下载](https://huggingface.co/Systran/faster-whisper-medium) |
-| faster-whisper-large-v2  | 2.87 GiB | ~3 GB | [下载](https://huggingface.co/Systran/faster-whisper-large-v2) |
+| faster-whisper-large-v3  | 2.87 GiB | ~3 GB | [下载](https://huggingface.co/Systran/faster-whisper-large-v3) |
 
 ## 翻译
 
