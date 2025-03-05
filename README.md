@@ -62,7 +62,7 @@ NVIDIA显卡可以使用[faster-whisper](https://github.com/Purfview/whisper-sta
     "abab6.5s-chat",
 ```
 
-* 转发模型可以使用`gpt-custom`，配置自定义OpenAI地址，并填写自定义OpenAI模型。
+* 转发模型可以使用`gpt-custom`，配置自定义OpenAI地址（例如`https://api.openai.com`），并填写自定义OpenAI模型。
 
 2. 本地翻译模型基于[llama.cpp](https://github.com/ggerganov/llama.cpp)引擎，已经为Vulkan编译配置好。
 
