@@ -1,3 +1,4 @@
+workflow_dispatch:
 name: Create Executable
 on:
   push:
