@@ -222,7 +222,7 @@ class MainWindow(QMainWindow):
 
         self.settings_layout.addWidget(BodyLabel("选择输入的语言。"))
         self.input_lang = QComboBox()
-        self.input_lang.addItems(['ja','en','ko','ru','fr'])
+        self.input_lang.addItems(['auto','cn','ja','en','ko','ru','fr'])
         self.settings_layout.addWidget(self.input_lang)
 
         # Translator Section
