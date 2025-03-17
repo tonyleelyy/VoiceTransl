@@ -24,7 +24,7 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 
 ## 听写
 
-本项目使用[whisper.cpp](https://github.com/ggerganov/whisper.cpp)模型，支持更高的兼容性，引擎已经为Vulkan编译配置好。
+* 本项目使用[whisper.cpp](https://github.com/ggerganov/whisper.cpp)模型，引擎已经为Vulkan编译配置好，兼容N卡/A卡/I卡。
 
 模型需要自行下载，请选择合适的模型下载然后放到`whisper`文件夹。
 
@@ -34,7 +34,7 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 | ggml-medium.bin | 1.5 GiB | ~2.1 GB | [下载](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin?download=true) |
 | ggml-large-v2.bin  | 2.9 GiB | ~3.9 GB | [下载](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2.bin?download=true) |
 
-NVIDIA显卡可以使用[faster-whisper](https://github.com/Purfview/whisper-standalone-win)模型，支持更高的速度和VAD功能。请根据[配置要求](whisper-faster/README.md)准备DLL和EXE文件。
+* NVIDIA显卡可以使用[faster-whisper](https://github.com/Purfview/whisper-standalone-win)模型，支持更高的速度和VAD功能。请根据[配置要求](whisper-faster/README.md)准备DLL和EXE文件。
 
 模型需要自行下载，请选择合适的模型下载然后放到`whisper-faster`文件夹。
 
@@ -43,6 +43,18 @@ NVIDIA显卡可以使用[faster-whisper](https://github.com/Purfview/whisper-sta
 | faster-whisper-small  | 463 MiB | ~1 GB | [下载](https://huggingface.co/Systran/faster-whisper-small) |
 | faster-whisper-medium | 1.42 GiB | ~2 GB | [下载](https://huggingface.co/Systran/faster-whisper-medium) |
 | faster-whisper-large-v3  | 2.87 GiB | ~3 GB | [下载](https://huggingface.co/Systran/faster-whisper-large-v3) |
+
+如果需要使用自定义whisper模型请参考下面的文件夹结构，必须要以`faster-whisper-`开头。
+
+```plaintext
+faster-whisper-xxx/
+    config.json
+    model.bin
+    preprocessor_config.json
+    tokenizer.json
+    vocabulary.json
+```
+
 
 ## 翻译
 
@@ -64,9 +76,14 @@ NVIDIA显卡可以使用[faster-whisper](https://github.com/Purfview/whisper-sta
 
 * 转发模型可以使用`gpt-custom`，配置自定义OpenAI地址（例如`https://api.openai.com`），并填写自定义OpenAI模型。
 
-2. 本地翻译模型基于[llama.cpp](https://github.com/ggerganov/llama.cpp)引擎，已经为Vulkan编译配置好。
+2. 本地翻译模型基于[llama.cpp](https://github.com/ggerganov/llama.cpp)引擎，已经为Vulkan编译配置好，兼容N卡/A卡/I卡。
 
 * NVIDIA显卡可以使用为[CUDA编译的版本](https://github.com/ggerganov/llama.cpp/releases/latest)，支持更高的速度和显存占用，请解压到`llama`文件夹覆盖原有文件。
+
+```
+cudart-llama-bin-win-cu12.4-x64.zip
+llama-bxxxx-bin-win-cuda-cu12.4-x64.zip
+```
 
 * 模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。选择模型的时候请使用对应代码。
 
