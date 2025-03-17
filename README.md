@@ -26,7 +26,7 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 
 * 本项目使用[whisper.cpp](https://github.com/ggerganov/whisper.cpp)模型，引擎已经为Vulkan编译配置好，兼容N卡/A卡/I卡。
 
-模型需要自行下载，请选择合适的模型下载然后放到`whisper`文件夹。
+模型需要自行下载，请选择合适的whisper.cpp模型下载然后放到`whisper`文件夹。
 
 | 名称 | 磁盘    | 显存     | 链接 |
 | ------ | ------- | ------- | ----- |
@@ -44,7 +44,7 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 | faster-whisper-medium | 1.42 GiB | ~2 GB | [下载](https://huggingface.co/Systran/faster-whisper-medium) |
 | faster-whisper-large-v3  | 2.87 GiB | ~3 GB | [下载](https://huggingface.co/Systran/faster-whisper-large-v3) |
 
-如果需要使用自定义whisper模型请参考下面的文件夹结构，必须要以`faster-whisper-`开头。
+如果需要使用自定义faster-whisper模型请参考下面的文件夹结构，必须要以`faster-whisper-`开头。
 
 ```plaintext
 faster-whisper-xxx/
