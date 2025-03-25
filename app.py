@@ -209,9 +209,9 @@ class MainWindow(QMainWindow):
         self.whisper_file.addItems(whisper_lst)
         self.settings_layout.addWidget(self.whisper_file)
 
-        self.settings_layout.addWidget(BodyLabel("🌍 选择输入的语言。(ja=日语，en=英语，ko=韩语，ru=俄语，fr=法语，auto=其他语言，仅听写）"))
+        self.settings_layout.addWidget(BodyLabel("🌍 选择输入的语言。(ja=日语，en=英语，ko=韩语，ru=俄语，fr=法语，zh=中文，仅听写）"))
         self.input_lang = QComboBox()
-        self.input_lang.addItems(['ja','en','ko','ru','fr','auto'])
+        self.input_lang.addItems(['ja','en','ko','ru','fr','zh'])
         self.settings_layout.addWidget(self.input_lang)
 
         # Translator Section
@@ -652,8 +652,8 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 翻译器未选择，跳过翻译步骤...")
                 continue
 
-            if language == 'auto':
-                self.status.emit("[INFO] 未指定语言，跳过翻译步骤...")
+            if language == 'zh':
+                self.status.emit("[INFO] 听写语言为中文，跳过翻译步骤...")
                 continue
 
             if 'sakura' in translator or 'qwen' in translator:
