@@ -22,7 +22,6 @@ plugin:
   filePlugin: file_galtransl_json # 指定文件读取插件，默认使用file_galtransl_json
   textPlugins: # 文本处理插件列表，按顺序执行
     - text_common_normalfix # 默认插件，修复常规通用问题
-    - (project_dir)text_common_example # 示例，(project_dir)代表插件在项目的plugins目录里
 # 代理设置
 proxy:
   enableProxy: false

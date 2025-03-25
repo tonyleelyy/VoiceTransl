@@ -119,6 +119,10 @@ class COpenAITokenPool:
                     api_address = api_address.replace('v1', 'v4')
                 if 'minimax' in api_address:
                     api_address = api_address.replace('/chat/completions', '/text/chatcompletion_v2')
+                if 'ark.cn' in api_address:
+                    api_address = api_address.replace('v1', 'v3')
+                if 'google' in api_address:
+                    api_address = api_address.replace('v1', 'v1beta/openai')
                 chatResponse = await client.post(
                     api_address,
                     headers=auth,

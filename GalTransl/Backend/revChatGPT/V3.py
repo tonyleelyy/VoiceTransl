@@ -214,7 +214,7 @@ class Chatbot:
                 "n": kwargs.get("n", self.reply_count),
                 "user": role,
                 "max_tokens": self.get_max_tokens(convo_id=convo_id),
-            } if not 'qwen2' in self.engine else {
+            } if (not 'dashscope' in self.api_address) and (not 'google' in self.api_address) else {
                 "model": self.engine,
                 "messages": self.conversation[convo_id],
                 "stream": True,
@@ -286,6 +286,10 @@ class Chatbot:
             self.api_address = self.api_address.replace('v1', 'v4')
         if 'minimax' in self.api_address:
             self.api_address = self.api_address.replace('/chat/completions', '/text/chatcompletion_v2')
+        if 'ark.cn' in api_address:
+            api_address = api_address.replace('v1', 'v3')
+        if 'google' in api_address:
+            api_address = api_address.replace('v1', 'v1beta/openai')
         async with self.aclient.stream(
             "post",
             self.api_address,
@@ -308,7 +312,7 @@ class Chatbot:
                 "n": kwargs.get("n", self.reply_count),
                 "user": role,
                 "max_tokens": self.get_max_tokens(convo_id=convo_id),
-            } if not 'qwen2' in self.engine else {
+            } if (not 'dashscope' in self.api_address) and (not 'google' in self.api_address) else {
                 "model": self.engine,
                 "messages": self.conversation[convo_id],
                 "stream": True,

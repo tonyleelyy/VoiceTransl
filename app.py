@@ -25,24 +25,13 @@ from GalTransl.__main__ import worker
 TRANSLATOR_SUPPORTED = [
     '不进行翻译',
     "gpt-custom",
-    "gpt35-1106",
-    "gpt4-turbo",
-    "moonshot-v1-8k",
     "deepseek-chat",
-    "glm-4",
-    "glm-4-flash",
-    "qwen2-7b-instruct",
-    "qwen2-57b-a14b-instruct",
-    "qwen2-72b-instruct",
-    "abab6.5-chat",
-    "abab6.5s-chat",
 ]
 
 TRANSLATOR_SUPPORTED_LOCAL = [
     '不进行翻译',
     "sakura-009",
     "sakura-010",
-    "index",
     "galtransl",
     "qwen-local",
 ]
@@ -178,11 +167,11 @@ class MainWindow(QMainWindow):
         self.status.connect(self.output_text_edit.append)
         self.input_output_layout.addWidget(self.output_text_edit)
 
-        self.open_output_button = QPushButton("📁 打开下载文件夹")
+        self.open_output_button = QPushButton("📁 打开下载和缓存文件夹")
         self.open_output_button.clicked.connect(lambda: os.startfile(os.path.join(os.getcwd(),'project/cache')))
         self.input_output_layout.addWidget(self.open_output_button)
         
-        self.clean_button = QPushButton("🧹 清空缓存")
+        self.clean_button = QPushButton("🧹 清空下载和缓存")
         self.clean_button.clicked.connect(self.cleaner)
         self.input_output_layout.addWidget(self.clean_button)
         
@@ -220,28 +209,28 @@ class MainWindow(QMainWindow):
         self.whisper_file.addItems(whisper_lst)
         self.settings_layout.addWidget(self.whisper_file)
 
-        self.settings_layout.addWidget(BodyLabel("选择输入的语言。"))
+        self.settings_layout.addWidget(BodyLabel("🌍 选择输入的语言。(ja=日语，en=英语，ko=韩语，ru=俄语，fr=法语，auto=其他语言，仅听写）"))
         self.input_lang = QComboBox()
-        self.input_lang.addItems(['ja','en','ko','ru','fr'])
+        self.input_lang.addItems(['ja','en','ko','ru','fr','auto'])
         self.settings_layout.addWidget(self.input_lang)
 
         # Translator Section
-        self.settings_layout.addWidget(BodyLabel("🌍 选择用于在线翻译的模型类别。"))
+        self.settings_layout.addWidget(BodyLabel("🚀 选择用于在线翻译的模型类别。"))
         self.translator_group = QComboBox()
         self.translator_group.addItems(TRANSLATOR_SUPPORTED)
         self.settings_layout.addWidget(self.translator_group)
         
-        self.settings_layout.addWidget(BodyLabel("在线模型令牌（如果选择在线模型）"))
+        self.settings_layout.addWidget(BodyLabel("🚀 在线模型令牌（如果选择在线模型）"))
         self.gpt_token = QLineEdit()
         self.gpt_token.setPlaceholderText("留空为使用上次配置的Token。")
         self.settings_layout.addWidget(self.gpt_token)
 
-        self.settings_layout.addWidget(BodyLabel("自定义OpenAI地址 (请选择gpt-custom，支持本地或在线OpenAI接口)"))
+        self.settings_layout.addWidget(BodyLabel("🚀 自定义OpenAI地址 (请选择gpt-custom)"))
         self.gpt_address = QLineEdit()
         self.gpt_address.setPlaceholderText("例如：http://127.0.0.1:11434")
         self.settings_layout.addWidget(self.gpt_address)
 
-        self.settings_layout.addWidget(BodyLabel("自定义OpenAI模型 (请选择gpt-custom，支持本地或在线OpenAI接口)"))
+        self.settings_layout.addWidget(BodyLabel("🚀 自定义OpenAI模型 (请选择gpt-custom)"))
         self.gpt_model = QLineEdit()
         self.gpt_model.setPlaceholderText("例如：qwen2.5")
         self.settings_layout.addWidget(self.gpt_model)
@@ -251,13 +240,13 @@ class MainWindow(QMainWindow):
         self.translator_group_local.addItems(TRANSLATOR_SUPPORTED_LOCAL)
         self.settings_layout.addWidget(self.translator_group_local)
         
-        self.settings_layout.addWidget(BodyLabel("离线模型文件（如果选择离线模型）"))
+        self.settings_layout.addWidget(BodyLabel("💻 离线模型文件（如果选择离线模型）"))
         self.sakura_file = QComboBox()
         sakura_lst = [i for i in os.listdir('llama') if i.endswith('gguf')]
         self.sakura_file.addItems(sakura_lst)
         self.settings_layout.addWidget(self.sakura_file)
         
-        self.settings_layout.addWidget(BodyLabel("离线模型参数（越大表示使用GPU越多）: "))
+        self.settings_layout.addWidget(BodyLabel("💻 离线模型参数（越大表示使用GPU越多）: "))
         self.sakura_value = QLineEdit()
         self.sakura_value.setPlaceholderText("100")
         self.sakura_value.setReadOnly(True)
@@ -559,30 +548,10 @@ class MainWorker(QObject):
                 if 'GPT4: # GPT4 API' in line:
                     lines[idx+2] = f"      - token: {gpt_token}\n"
                     lines[idx+4] = f"    defaultEndpoint: {gpt_address}\n"
-            if 'moonshot' in translator:
-                if 'GPT35:' in line:
-                    lines[idx+4] = f"      - token: {gpt_token}\n"
-                    lines[idx+6] = f"    defaultEndpoint: https://api.moonshot.cn\n"
-                    lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
             if 'deepseek' in translator:
                 if 'GPT35:' in line:
                     lines[idx+4] = f"      - token: {gpt_token}\n"
                     lines[idx+6] = f"    defaultEndpoint: https://api.deepseek.com\n"
-                    lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
-            if 'qwen2' in translator:
-                if 'GPT35:' in line:
-                    lines[idx+4] = f"      - token: {gpt_token}\n"
-                    lines[idx+6] = f"    defaultEndpoint: https://dashscope.aliyuncs.com/compatible-mode\n"
-                    lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
-            if 'glm' in translator:
-                if 'GPT35:' in line:
-                    lines[idx+4] = f"      - token: {gpt_token}\n"
-                    lines[idx+6] = f"    defaultEndpoint: https://open.bigmodel.cn/api/paas\n"
-                    lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
-            if 'abab' in translator:
-                if 'GPT35:' in line:
-                    lines[idx+4] = f"      - token: {gpt_token}\n"
-                    lines[idx+6] = f"    defaultEndpoint: https://api.minimax.chat\n"
                     lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
             if proxy_address:
                 if 'proxy' in line:
@@ -592,11 +561,8 @@ class MainWorker(QObject):
                 if 'proxy' in line:
                     lines[idx+1] = f"  enableProxy: false\n"
 
-        if 'moonshot' in translator or 'qwen2' in translator or 'glm' in translator or 'abab' in translator or 'gpt-custom' in translator or 'deepseek' in translator:
+        if 'gpt-custom' in translator or 'deepseek' in translator:
             translator = 'gpt35-1106'
-        
-        if 'index' in translator:
-            translator = 'sakura-009'
 
         if 'galtransl' in translator:
             translator = 'sakura-010'
@@ -684,6 +650,10 @@ class MainWorker(QObject):
 
             if translator == '不进行翻译':
                 self.status.emit("[INFO] 翻译器未选择，跳过翻译步骤...")
+                continue
+
+            if language == 'auto':
+                self.status.emit("[INFO] 未指定语言，跳过翻译步骤...")
                 continue
 
             if 'sakura' in translator or 'qwen' in translator:

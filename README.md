@@ -2,13 +2,13 @@
 <h1><p align='center' >VoiceTransl</p></h1>
 <div align=center><img src="https://img.shields.io/github/v/release/shinnpuru/VoiceTransl"/>   <img src="https://img.shields.io/github/license/shinnpuru/VoiceTransl"/>   <img src="https://img.shields.io/github/stars/shinnpuru/VoiceTransl"/></div>
 
-VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和翻译软件，从视频下载，音频提取，听写打轴，字幕翻译，视频合成各个环节为翻译者提供便利。详细说明请见 [视频教程](https://www.bilibili.com/video/BV1DzrAYMEHo)。
+VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和翻译软件，从视频下载，音频提取，听写打轴，字幕翻译，视频合成各个环节为翻译者提供便利。本项目基于[Galtransl]((https://github.com/xd2333/GalTransl))，采用GPLv3许可。使用说明请见 [视频教程](https://www.bilibili.com/video/BV1DzrAYMEHo)。
 
 <div align=center><img src="title.jpg" alt="title" style="width:512px;"/></div>
 
 ## 特色
 
-* 支持多种翻译模型，包括在线模型（GPT3.5、GPT4、Moonshot、Minimax、Qwen、GLM、Deepseek及任意OpenAI兼容接口）和本地模型（Sakura、Index、Galtransl及任意llama.cpp，Ollama模型）。
+* 支持多种翻译模型，包括在线模型（Deepseek及任意OpenAI兼容接口）和本地模型（Sakura、Galtransl及任意llama.cpp，Ollama模型）。
 * 支持AMD/NVIDIA/Intel GPU加速，翻译引擎支持调整显存占用。
 * 支持多种输入格式，包括音频、视频、SRT字幕。
 * 支持多种输出格式，包括SRT字幕、LRC字幕。
@@ -24,9 +24,7 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 
 ## 听写
 
-* 本项目使用[whisper.cpp](https://github.com/ggerganov/whisper.cpp)模型，引擎已经为Vulkan编译配置好，兼容N卡/A卡/I卡。
-
-模型需要自行下载，请选择合适的whisper.cpp模型下载然后放到`whisper`文件夹。
+* 本项目使用[whisper.cpp](https://github.com/ggerganov/whisper.cpp)模型，引擎已经为Vulkan编译配置好，兼容N卡/A卡/I卡。模型需要自行下载，请选择合适的whisper.cpp模型下载然后放到`whisper`文件夹。
 
 | 名称 | 磁盘    | 显存     | 链接 |
 | ------ | ------- | ------- | ----- |
@@ -34,9 +32,7 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 | ggml-medium.bin | 1.5 GiB | ~2.1 GB | [下载](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin?download=true) |
 | ggml-large-v2.bin  | 2.9 GiB | ~3.9 GB | [下载](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2.bin?download=true) |
 
-* NVIDIA显卡可以使用[faster-whisper](https://github.com/Purfview/whisper-standalone-win)模型，支持更高的速度和VAD功能。请根据[配置要求](whisper-faster/README.md)准备DLL和EXE文件。
-
-模型需要自行下载，请选择合适的模型下载然后放到`whisper-faster`文件夹。
+* NVIDIA显卡可以使用[faster-whisper](https://github.com/Purfview/whisper-standalone-win)模型，支持更高的速度和VAD功能。请根据[配置要求](whisper-faster/README.md)下载文件。模型需要自行下载，请选择合适的模型下载然后放到`whisper-faster`文件夹。
 
 | 名称  | 磁盘    | 显存     | 链接 |
 | ------ | ------- | ------- | ----- |
@@ -44,7 +40,7 @@ VoiceTransl（原Galtransl for ASMR）是一站式离线AI视频字幕生成和�
 | faster-whisper-medium | 1.42 GiB | ~2 GB | [下载](https://huggingface.co/Systran/faster-whisper-medium) |
 | faster-whisper-large-v3  | 2.87 GiB | ~3 GB | [下载](https://huggingface.co/Systran/faster-whisper-large-v3) |
 
-如果需要使用自定义faster-whisper模型请参考下面的文件夹结构，必须要以`faster-whisper-`开头。
+`faster-whisper`模型请参考下面的文件夹结构，必须要以`faster-whisper-`开头。
 
 ```plaintext
 faster-whisper-xxx/
@@ -56,27 +52,23 @@ faster-whisper-xxx/
 ```
 
 
-## 翻译
+## 在线翻译
 
-1. 在线翻译模型支持任意的OpenAI兼容接口，以及国内各大模型。使用时请填写API密钥。具体列表如下：
+* 在线翻译模型支持DeepSeek（`deepseek-chat`）以及任意的OpenAI兼容接口。请使用`gpt-custom`，配置自定义OpenAI地址（例如`https://api.openai.com`，默认会自动添加`/v1/chat/completions`），并填写自定义OpenAI模型。
 
-```
-    "gpt35-1106",
-    "gpt4-turbo",
-    "moonshot-v1-8k",
-    "deepseek-chat",
-    "glm-4",
-    "glm-4-flash",
-    "qwen2-7b-instruct",
-    "qwen2-57b-a14b-instruct",
-    "qwen2-72b-instruct",
-    "abab6.5-chat",
-    "abab6.5s-chat",
-```
+* 以下是一些OpenAI兼容接口的地址：
+  
+  * [Moonshot系列](https://platform.moonshot.cn/)请使用`https://api.moonshot.cn`作为地址。
+  * [GLM系列](https://open.bigmodel.cn)请使用`https://open.bigmodel.cn/api/paas`作为地址，特殊后缀已支持。
+  * [Minimax系列](https://platform.minimaxi.com/)请使用`https://api.minimax.chat`作为地址，特殊后缀已支持。
+  * [Doubao系列](https://doubao.ai)请使用`https://ark.cn-beijing.volces.com/api`作为地址，特殊后缀已支持。
+  * [Qwen系列](https://help.aliyun.com/zh/model-studio/developer-reference/use-qwen-by-calling-api)请使用`https://dashscope.aliyuncs.com/compatible-mode`作为地址。
+  * [Gemini系列](https://www.gemini.ai)请使用`https://generativelanguage.googleapis.com`作为地址，特殊后缀已支持。
+  * [Ollama引擎](https://ollama.com/blog/openai-compatibility)请使用`http://localhost:11434`。
 
-* 转发模型可以使用`gpt-custom`，配置自定义OpenAI地址（例如`https://api.openai.com`），并填写自定义OpenAI模型。
+## 离线翻译
 
-2. 本地翻译模型基于[llama.cpp](https://github.com/ggerganov/llama.cpp)引擎，已经为Vulkan编译配置好，兼容N卡/A卡/I卡。
+* 本地翻译模型基于[llama.cpp](https://github.com/ggerganov/llama.cpp)引擎，已经为Vulkan编译配置好，兼容N卡/A卡/I卡。
 
 * NVIDIA显卡可以使用为[CUDA编译的版本](https://github.com/ggerganov/llama.cpp/releases/latest)，支持更高的速度和显存占用，请解压到`llama`文件夹覆盖原有文件。
 
@@ -85,25 +77,15 @@ cudart-llama-bin-win-cu12.4-x64.zip
 llama-bxxxx-bin-win-cuda-cu12.4-x64.zip
 ```
 
-* 模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。选择模型的时候请使用对应代码。
+* 模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。选择模型的时候请使用对应代码，并选择模型。非日语模型请使用`qwen-local`作为代码。
 
-日语
-
-| 名称 | 代码 | 磁盘    | 显存     | 链接 |
-| ------ | ------ |  ------- | ------- | ----- |
-| [Index-1.9B-Q4](https://github.com/bilibili/Index-1.9B)  | index |  ~1 GiB | ~4G | [下载](https://huggingface.co/IndexTeam/Index-1.9B-Chat-GGUF) |
-| [Sakura-7B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM)  | sakura-010 |  ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-7B-Qwen2.5-v1.0-GGUF) |
-| [GalTransl-7B-v2.6-Q4](https://github.com/xd2333/GalTransl) | galtransl | ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/GalTransl-7B-v2.6) |
-| [Sakura-14B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM)  |  sakura-010 | ~9 GiB | ~16 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF) |
-
-英语
-
-| 名称  |  代码  | 磁盘    | 显存     | 链接 |
-| ------ |  ------ | ------- | ------- | ----- |
-| [Qwen-2.5-7B-Q4](https://github.com/QwenLM/Qwen2.5)  |  qwen-local | ~5 GiB | ~8 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF) |
-| [Qwen-2.5-14B-Q4](https://github.com/QwenLM/Qwen2.5)  |  qwen-local | ~9 GiB | ~16 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF) |
-
-* 本项目也支持Ollama引擎，请使用gpt-custom接口，配置自定义OpenAI地址为`http://localhost:11434`，并填写自定义OpenAI模型。具体请参考[OpenAI兼容性](https://ollama.com/blog/openai-compatibility).
+| 名称 | 语言 | 代码 | 磁盘    | 显存     | 链接 |
+| ------ | ------ | ------ |  ------- | ------- | ----- |
+| [Sakura-7B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM) | 日语 | sakura-010 |  ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-7B-Qwen2.5-v1.0-GGUF) |
+| [Sakura-GalTransl-7B-v3](https://github.com/xd2333/GalTransl) | 日语 | galtransl | ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-GalTransl-7B-v3) |
+| [Sakura-14B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM) | 日语 |  sakura-010 | ~9 GiB | ~16 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF) |
+| [Qwen-2.5-7B-Q4](https://github.com/QwenLM/Qwen2.5) | 英语 |  qwen-local | ~5 GiB | ~8 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF) |
+| [Qwen-2.5-14B-Q4](https://github.com/QwenLM/Qwen2.5) | 英语 |  qwen-local | ~9 GiB | ~16 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF) |
 
 ## 模式
 
