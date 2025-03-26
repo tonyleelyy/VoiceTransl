@@ -66,6 +66,7 @@ class MainWindow(QMainWindow):
         self.initAdvancedSettingTab()
         self.initDictTab()
         self.initToolTab()
+        self.initSummarizeTab()
         self.initAboutTab()
 
         # load config
@@ -82,6 +83,9 @@ class MainWindow(QMainWindow):
                 sakura_mode = int(lines[7].strip())
                 proxy_address = lines[8].strip()
                 translator_local = lines[9].strip()
+                summary_address = lines[10].strip()
+                summary_model = lines[11].strip()
+                summary_token = lines[12].strip()
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
@@ -93,6 +97,9 @@ class MainWindow(QMainWindow):
                 if self.sakura_file: self.sakura_file.setCurrentText(sakura_file)
                 self.sakura_mode.setValue(sakura_mode)
                 self.proxy_address.setText(proxy_address)
+                self.summarize_address.setText(summary_address)
+                self.summarize_model.setText(summary_model)
+                self.summarize_token.setText(summary_token)
 
         if os.path.exists('whisper/param.txt'):
             with open('whisper/param.txt', 'r', encoding='utf-8') as f:
@@ -320,7 +327,43 @@ class MainWindow(QMainWindow):
         self.run_synth_button.clicked.connect(self.run_synth)
         self.tool_layout.addWidget(self.run_synth_button)
         
-        self.addSubInterface(self.tool_tab, FluentIcon.BRUSH, "工具", NavigationItemPosition.TOP)
+        self.addSubInterface(self.tool_tab, FluentIcon.BRUSH, "字幕工具", NavigationItemPosition.TOP)
+
+    def initSummarizeTab(self):
+        self.summarize_tab = Widget("Summarize", self)
+        self.summarize_layout = self.summarize_tab.vBoxLayout
+
+        self.summarize_layout.addWidget(BodyLabel("🌍 OpenAI兼容地址"))
+        self.summarize_address = QLineEdit()
+        self.summarize_address.setPlaceholderText("例如：https://api.deepseek.com/v1")
+        self.summarize_layout.addWidget(self.summarize_address)
+
+        self.summarize_layout.addWidget(BodyLabel("🚩 模型名称"))
+        self.summarize_model = QLineEdit()
+        self.summarize_model.setPlaceholderText("例如：deepseek-chat")
+        self.summarize_layout.addWidget(self.summarize_model)
+
+        self.summarize_layout.addWidget(BodyLabel("📛 模型令牌"))
+        self.summarize_token = QLineEdit()
+        self.summarize_layout.addWidget(self.summarize_token)
+
+        self.summarize_layout.addWidget(BodyLabel("🖋️ 模型提示"))
+        self.summarize_prompt = QTextEdit()
+        self.summarize_prompt.setPlaceholderText("请为以下内容创建一个带有时间戳（mm:ss格式）的粗略摘要，不多于10个事件。请关注关键事件和重要时刻，并确保所有时间戳都采用分钟:秒钟格式。")
+        self.summarize_layout.addWidget(self.summarize_prompt)
+
+        self.summarize_layout.addWidget(BodyLabel("📁 输入文件"))
+        self.summarize_files_list = QTextEdit()
+        self.summarize_files_list.setAcceptDrops(True)
+        self.summarize_files_list.dropEvent = lambda e: self.summarize_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
+        self.summarize_files_list.setPlaceholderText("拖拽文件到方框内，点击运行即可。输出文件为输入文件名.summary.txt。")
+        self.summarize_layout.addWidget(self.summarize_files_list)
+
+        self.run_summarize_button = QPushButton("🚀 运行")
+        self.run_summarize_button.clicked.connect(self.run_summarize)
+        self.summarize_layout.addWidget(self.run_summarize_button)
+
+        self.addSubInterface(self.summarize_tab, FluentIcon.BOOK_SHELF, "字幕总结", NavigationItemPosition.TOP)
         
     def select_input(self):
         options = QFileDialog.Options()
@@ -359,6 +402,14 @@ class MainWindow(QMainWindow):
         self.thread.started.connect(self.worker.synth)
         self.worker.finished.connect(self.thread.quit)
         self.thread.start()
+
+    def run_summarize(self):
+        self.thread = QThread()
+        self.worker = MainWorker(self)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.summarize)
+        self.worker.finished.connect(self.thread.quit)
+        self.thread.start()
     
     def cleaner(self):
         self.status.emit("[INFO] 正在清理中间文件...")
@@ -390,8 +441,50 @@ class MainWorker(QObject):
         self.status = master.status
 
     @error_handler
-    def split(self):
+    def save_config(self):
         self.status.emit("[INFO] 正在读取配置...")
+        whisper_file = self.master.whisper_file.currentText()
+        translator = self.master.translator_group.currentText()
+        translator_local = self.master.translator_group_local.currentText()
+        language = self.master.input_lang.currentText()
+        gpt_token = self.master.gpt_token.text()
+        gpt_address = self.master.gpt_address.text()
+        gpt_model = self.master.gpt_model.text()
+        sakura_file = self.master.sakura_file.currentText()
+        sakura_mode = self.master.sakura_mode.value()
+        proxy_address = self.master.proxy_address.text()
+        summary_address = self.master.summarize_address.text()
+        summary_model = self.master.summarize_model.text()
+        summary_token = self.master.summarize_token.text()
+
+        # save config
+        with open('config.txt', 'w', encoding='utf-8') as f:
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{translator_local}\n{summary_address}\n{summary_model}\n{summary_token}\n")
+
+    @error_handler
+    def summarize(self):
+        self.save_config()
+        input_files = self.master.summarize_files_list.toPlainText()
+        address = self.master.summarize_address.text()
+        model = self.master.summarize_model.text()
+        token = self.master.summarize_token.text()
+        prompt = self.master.summarize_prompt.toPlainText()
+        if input_files:
+            input_files = input_files.strip().split('\n')
+            for idx, input_file in enumerate(input_files):
+                if not os.path.exists(input_file):
+                    self.status.emit(f"[ERROR] {input_file}文件不存在，请重新选择文件！")
+                    self.finished.emit()
+
+                from summarize import summarize
+                self.status.emit(f"[INFO] 正在进行文本摘要...第{idx+1}个，共{len(input_files)}个")
+                summarize(input_file, address, model, token, prompt)
+            self.status.emit("[INFO] 文件处理完成！")
+        self.finished.emit()
+
+    @error_handler
+    def split(self):
+        self.save_config()
         input_files = self.master.split_files_list.toPlainText()
         split_mode = self.master.split_mode.value()
         if input_files:
@@ -414,7 +507,7 @@ class MainWorker(QObject):
 
     @error_handler
     def merge(self):
-        self.status.emit("[INFO] 正在读取配置...")
+        self.save_config()
         input_files = self.master.merge_files_list.toPlainText()
         split_mode = self.master.split_mode.value()
         if input_files:
@@ -441,7 +534,7 @@ class MainWorker(QObject):
 
     @error_handler
     def synth(self):
-        self.status.emit("[INFO] 正在读取配置...")
+        self.save_config()
         input_files = self.master.synth_files_list.toPlainText()
         if input_files:
             input_files = input_files.strip().split('\n')
@@ -473,7 +566,7 @@ class MainWorker(QObject):
 
     @error_handler
     def run(self):
-        self.status.emit("[INFO] 正在读取配置...")
+        self.save_config()
         input_files = self.master.input_files_list.toPlainText()
         yt_url = self.master.yt_url.toPlainText()
         whisper_file = self.master.whisper_file.currentText()
@@ -491,10 +584,6 @@ class MainWorker(QObject):
         after_dict = self.master.after_dict.toPlainText()
         param_whisper = self.master.param_whisper.toPlainText()
         param_llama = self.master.param_llama.toPlainText()
-
-        # save config
-        with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{translator_local}\n")
 
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
             f.write(param_whisper)
