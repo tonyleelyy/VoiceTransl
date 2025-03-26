@@ -373,7 +373,14 @@ class MainWindow(QMainWindow):
             shutil.rmtree('project/cache')
         os.makedirs('project/cache', exist_ok=True)
 
-
+def error_handler(func):
+    def wrapper(self):
+        try:
+            func(self)
+        except Exception as e:
+            self.status.emit(f"[ERROR] {e}")
+            self.finished.emit()
+    return wrapper
 class MainWorker(QObject):
     finished = pyqtSignal()
 
@@ -382,6 +389,7 @@ class MainWorker(QObject):
         self.master = master
         self.status = master.status
 
+    @error_handler
     def split(self):
         self.status.emit("[INFO] 正在读取配置...")
         input_files = self.master.split_files_list.toPlainText()
@@ -404,6 +412,7 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 音频分割完成！")
         self.finished.emit()
 
+    @error_handler
     def merge(self):
         self.status.emit("[INFO] 正在读取配置...")
         input_files = self.master.merge_files_list.toPlainText()
@@ -430,6 +439,7 @@ class MainWorker(QObject):
             self.status.emit("[INFO] 所有文件处理完成！")
         self.finished.emit()
 
+    @error_handler
     def synth(self):
         self.status.emit("[INFO] 正在读取配置...")
         input_files = self.master.synth_files_list.toPlainText()
@@ -461,6 +471,7 @@ class MainWorker(QObject):
             
         self.finished.emit()
 
+    @error_handler
     def run(self):
         self.status.emit("[INFO] 正在读取配置...")
         input_files = self.master.input_files_list.toPlainText()
