@@ -2,7 +2,7 @@
 <h1><p align='center' >VoiceTransl</p></h1>
 <div align=center><img src="https://img.shields.io/github/v/release/shinnpuru/VoiceTransl"/>   <img src="https://img.shields.io/github/license/shinnpuru/VoiceTransl"/>   <img src="https://img.shields.io/github/stars/shinnpuru/VoiceTransl"/></div>
 
-VoiceTransl是一站式离线AI视频字幕生成和翻译软件，从视频下载，音频提取，听写打轴，字幕翻译，视频合成，字幕总结各个环节为翻译者提供便利。本项目基于[Galtransl]((https://github.com/xd2333/GalTransl))，采用GPLv3许可。使用说明请见 [视频教程](https://www.bilibili.com/video/BV1DzrAYMEHo)。
+VoiceTransl是一站式离线AI视频字幕生成和翻译软件，从视频下载，音频提取，听写打轴，字幕翻译，视频合成，字幕总结各个环节为翻译者提供便利。本项目基于[Galtransl](https://github.com/xd2333/GalTransl)，采用GPLv3许可。使用说明请见 [视频教程](https://www.bilibili.com/video/BV1DzrAYMEHo)。
 
 <div align=center><img src="title.jpg" alt="title" style="width:512px;"/></div>
 
