@@ -1,0 +1,1 @@
+whisper/whisper-cli -m whisper/$whisper_file -osrt -l $language $input_file.wav -of $input_file

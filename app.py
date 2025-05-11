@@ -1,6 +1,6 @@
 import sys, os
 
-# os.chdir(sys._MEIPASS)
+os.chdir(sys._MEIPASS)
 import shutil
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime
@@ -114,6 +114,10 @@ class MainWindow(QMainWindow):
         if os.path.exists('whisper/param.txt'):
             with open('whisper/param.txt', 'r', encoding='utf-8') as f:
                 self.param_whisper.setPlainText(f.read())
+
+        if os.path.exists('whisper-faster/param.txt'):
+            with open('whisper-faster/param.txt', 'r', encoding='utf-8') as f:
+                self.param_whisper_faster.setPlainText(f.read())
 
         if os.path.exists('llama/param.txt'):
             with open('llama/param.txt', 'r', encoding='utf-8') as f:
@@ -322,6 +326,13 @@ class MainWindow(QMainWindow):
         self.input_lang.addItems(['ja','en','ko','ru','fr','zh'])
         self.settings_layout.addWidget(self.input_lang)
 
+        self.open_whisper_dir = QPushButton("📁 打开Whisper目录")
+        self.open_whisper_dir.clicked.connect(lambda: os.startfile(os.path.join(os.getcwd(),'whisper')))
+        self.open_faster_dir = QPushButton("📁 打开Faster Whisper目录")
+        self.open_faster_dir.clicked.connect(lambda: os.startfile(os.path.join(os.getcwd(),'whisper-faster')))
+        self.settings_layout.addWidget(self.open_whisper_dir)
+        self.settings_layout.addWidget(self.open_faster_dir)
+
         # Translator Section
         self.settings_layout.addWidget(BodyLabel("🚀 选择用于翻译的模型类别。"))
         self.translator_group = QComboBox()
@@ -349,7 +360,7 @@ class MainWindow(QMainWindow):
         self.sakura_file.addItems(sakura_lst)
         self.settings_layout.addWidget(self.sakura_file)
         
-        self.settings_layout.addWidget(BodyLabel("💻 离线模型参数 "))
+        self.settings_layout.addWidget(BodyLabel("💻 离线模型参数（galtransl， sakura）"))
         self.sakura_value = QLineEdit()
         self.sakura_value.setPlaceholderText("100")
         self.sakura_value.setReadOnly(True)
@@ -360,20 +371,29 @@ class MainWindow(QMainWindow):
         self.sakura_mode.valueChanged.connect(lambda: self.sakura_value.setText(str(self.sakura_mode.value())))
         self.settings_layout.addWidget(self.sakura_mode)
 
+        self.open_model_dir = QPushButton("📁 打开离线模型目录")
+        self.open_model_dir.clicked.connect(lambda: os.startfile(os.path.join(os.getcwd(),'llama')))
+        self.settings_layout.addWidget(self.open_model_dir)
+
         self.addSubInterface(self.settings_tab, FluentIcon.SETTING, "基础设置", NavigationItemPosition.TOP)
 
     def initAdvancedSettingTab(self):
         self.advanced_settings_tab = Widget("AdvancedSettings", self)
         self.advanced_settings_layout = self.advanced_settings_tab.vBoxLayout
         
-        self.advanced_settings_layout.addWidget(BodyLabel("🔧 输入额外的Whisper命令行参数。"))
+        self.advanced_settings_layout.addWidget(BodyLabel("🔧 输入Whisper命令行参数。"))
         self.param_whisper = QTextEdit()
-        self.param_whisper.setPlaceholderText("每个参数单独一行，请参考Whisper.cpp和Faster-Whisper文档，不清楚请保持默认。")
+        self.param_whisper.setPlaceholderText("每个参数空格隔开，请参考Whisper.cpp，不清楚请保持默认。")
         self.advanced_settings_layout.addWidget(self.param_whisper)
 
-        self.advanced_settings_layout.addWidget(BodyLabel("🔧 输入额外的Llama.cpp命令行参数。"))
+        self.advanced_settings_layout.addWidget(BodyLabel("🔧 输入Whisper-Faster命令行参数。"))
+        self.param_whisper_faster = QTextEdit()
+        self.param_whisper_faster.setPlaceholderText("每个参数空格隔开，请参考Faster Whisper文档，不清楚请保持默认。")
+        self.advanced_settings_layout.addWidget(self.param_whisper_faster)
+
+        self.advanced_settings_layout.addWidget(BodyLabel("🔧 输入Llama.cpp命令行参数。"))
         self.param_llama = QTextEdit()
-        self.param_llama.setPlaceholderText("每个参数单独一行，请参考Llama.cpp文档，不清楚请保持默认。")
+        self.param_llama.setPlaceholderText("每个参数空格隔开，请参考Llama.cpp文档，不清楚请保持默认。")
         self.advanced_settings_layout.addWidget(self.param_llama)
 
         self.addSubInterface(self.advanced_settings_tab, FluentIcon.ASTERISK, "高级设置", NavigationItemPosition.TOP)
@@ -699,10 +719,14 @@ class MainWorker(QObject):
         gpt_dict = self.master.gpt_dict.toPlainText()
         after_dict = self.master.after_dict.toPlainText()
         param_whisper = self.master.param_whisper.toPlainText()
+        param_whisper_faster = self.master.param_whisper_faster.toPlainText()
         param_llama = self.master.param_llama.toPlainText()
 
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
             f.write(param_whisper)
+
+        with open('whisper-faster/param.txt', 'w', encoding='utf-8') as f:
+            f.write(param_whisper_faster)
 
         with open('llama/param.txt', 'w', encoding='utf-8') as f:
             f.write(param_llama)
@@ -840,9 +864,11 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 正在进行语音识别...")
 
                 if whisper_file.startswith('ggml'):
-                    self.pid = subprocess.Popen(['whisper/whisper-cli', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file]+param_whisper.split(), stdout=sys.stdout, stderr=sys.stdout)
+                    print(param_whisper)
+                    self.pid = subprocess.Popen([param.replace('$whisper_file',whisper_file).replace('$input_file',input_file).replace('$language',language) for param in param_whisper.split()], stdout=sys.stdout, stderr=sys.stdout)
                 elif whisper_file.startswith('faster-whisper'):
-                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--beep_off', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', language, '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav']+param_whisper.split(), stdout=sys.stdout, stderr=sys.stdout)
+                    print(param_whisper_faster)
+                    self.pid = subprocess.Popen([param.replace('$whisper_file',whisper_file[15:]).replace('$input_file',input_file).replace('$language',language).replace('$output_dir',os.path.dirname(input_file)) for param in param_whisper.split()]+param_whisper_faster.split(), stdout=sys.stdout, stderr=sys.stdout)
                 else:
                     self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
                     continue
@@ -867,8 +893,9 @@ class MainWorker(QObject):
                 if not sakura_file:
                     self.status.emit("[INFO] 未选择模型文件，跳过翻译步骤...")
                     continue
-
-                self.pid = subprocess.Popen(['llama/llama-server', '-m', 'llama/'+sakura_file, '-ngl' , str(sakura_mode), '--port', '8989']+param_llama.split(), stdout=sys.stdout, stderr=sys.stdout)
+                
+                print(param_llama)
+                self.pid = subprocess.Popen([param.replace('$model_file',sakura_file).replace('$model_layers',sakura_mode).replace('$port', 8989) for param in param_llama.split()], stdout=sys.stdout, stderr=sys.stdout)
 
             self.status.emit("[INFO] 正在进行翻译...")
             worker('project', 'config.yaml', translator, show_banner=False)
