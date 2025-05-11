@@ -805,16 +805,7 @@ class MainWorker(QObject):
 
         for idx, input_file in enumerate(input_files):
             if not os.path.exists(input_file):
-                if 'youtu.be' in input_file or 'youtube.com' in input_file:
-                    if os.path.exists('project/YoutubeDL.webm'):
-                        os.remove('project/YoutubeDL.webm')
-                    with YoutubeDL({'proxy': proxy_address,'outtmpl': 'project/YoutubeDL.webm'}) as ydl:
-                        self.status.emit("[INFO] 正在下载视频...")
-                        results = ydl.download([input_file])
-                        self.status.emit("[INFO] 视频下载完成！")
-                    input_file = 'project/YoutubeDL.webm'
-
-                elif 'BV' in yt_url:
+                if 'BV' in input_file:
                     self.status.emit("[INFO] 正在下载视频...")
                     res = send_request(URL_VIDEO_INFO, params={'bvid': input_file})
                     download([Video(
@@ -831,8 +822,13 @@ class MainWorker(QObject):
                     input_file = f'{title}.mp4'
 
                 else:
-                    self.status.emit(f"[ERROR] {input_file}文件不存在，请重新选择文件！")
-                    continue
+                    if os.path.exists('YoutubeDL.webm'):
+                        os.remove('YoutubeDL.webm')
+                    with YoutubeDL({'proxy': proxy_address,'outtmpl': 'YoutubeDL.webm'}) as ydl:
+                        self.status.emit("[INFO] 正在下载视频...")
+                        results = ydl.download([input_file])
+                        self.status.emit("[INFO] 视频下载完成！")
+                    input_file = 'YoutubeDL.webm'
 
                 if os.path.exists(os.path.join('project/cache', os.path.basename(input_file))):
                     os.remove(os.path.join('project/cache', os.path.basename(input_file)))
