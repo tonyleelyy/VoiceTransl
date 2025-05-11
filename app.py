@@ -1,6 +1,6 @@
 import sys, os
 
-os.chdir(sys._MEIPASS)
+# os.chdir(sys._MEIPASS)
 import shutil
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime
@@ -22,21 +22,29 @@ from srt2prompt import make_prompt
 from prompt2srt import make_srt
 from GalTransl.__main__ import worker
 
+ONLINE_TRANSLATOR_MAPPING = {
+    'moonshot': 'https://api.moonshot.cn',
+    'glm': 'https://open.bigmodel.cn/api/paas',
+    'deepseek': 'https://api.deepseek.com',
+    'minimax': 'https://api.minimax.chat',
+    'doubao': 'https://ark.cn-beijing.volces.com/api',
+    'aliyun': 'https://dashscope.aliyuncs.com/compatible-mode',
+    'gemini': 'https://generativelanguage.googleapis.com',
+    'ollama': 'http://localhost:11434'
+}
+
 TRANSLATOR_SUPPORTED = [
     '不进行翻译',
     "gpt-custom",
-    "deepseek-chat",
-]
-
-TRANSLATOR_SUPPORTED_LOCAL = [
-    '不进行翻译',
     "sakura-009",
     "sakura-010",
-    "galtransl",
-    "qwen-local",
-]
+    "galtransl"
+] + list(ONLINE_TRANSLATOR_MAPPING.keys())
 
+# redirect sys.stdout and sys.stderr to one log file
 LOG_PATH = 'log.txt'
+sys.stdout = open(LOG_PATH, 'w', encoding='utf-8')
+sys.stderr = sys.stdout
 
 class Widget(QFrame):
 
@@ -86,14 +94,12 @@ class MainWindow(QMainWindow):
                 sakura_file = lines[6].strip()
                 sakura_mode = int(lines[7].strip())
                 proxy_address = lines[8].strip()
-                translator_local = lines[9].strip()
-                summary_address = lines[10].strip()
-                summary_model = lines[11].strip()
-                summary_token = lines[12].strip()
+                summary_address = lines[9].strip()
+                summary_model = lines[10].strip()
+                summary_token = lines[11].strip()
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
-                self.translator_group_local.setCurrentText(translator_local)
                 self.input_lang.setCurrentText(language)
                 self.gpt_token.setText(gpt_token)
                 self.gpt_address.setText(gpt_address)
@@ -113,6 +119,18 @@ class MainWindow(QMainWindow):
             with open('llama/param.txt', 'r', encoding='utf-8') as f:
                 self.param_llama.setPlainText(f.read())
 
+        if os.path.exists('project/项目字典_译前.txt'):
+            with open('project/项目字典_译前.txt', 'r', encoding='utf-8') as f:
+                self.before_dict.setPlainText(f.read())
+
+        if os.path.exists('project/项目GPT字典.txt'):
+            with open('project/项目GPT字典.txt', 'r', encoding='utf-8') as f:
+                self.gpt_dict.setPlainText(f.read())
+
+        if os.path.exists('project/项目字典_译后.txt'):
+            with open('project/项目字典_译后.txt', 'r', encoding='utf-8') as f:
+                self.after_dict.setPlainText(f.read())
+
     def setup_timer(self):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.read_log_file)
@@ -124,10 +142,10 @@ class MainWindow(QMainWindow):
         """读取日志文件并更新显示"""
         try:
             # 检查文件是否存在
-            if not os.path.exists(self.log_file_path):
+            if not os.path.exists(LOG_PATH):
                 if not self.file_not_found_message_shown:
                     timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
-                    self.log_display.setPlainText(f"[{timestamp}] 错误: 日志文件 '{self.log_file_path}' 未找到。正在等待文件创建...\n")
+                    self.log_display.setPlainText(f"[{timestamp}] 错误: 日志文件 '{LOG_PATH}' 未找到。正在等待文件创建...\n")
                     self.file_not_found_message_shown = True
                 self.last_read_position = 0 # 如果文件消失了，重置读取位置
                 return
@@ -138,7 +156,7 @@ class MainWindow(QMainWindow):
                 self.file_not_found_message_shown = False
                 self.last_read_position = 0 # 从头开始读
 
-            with open(self.log_file_path, 'r', encoding='utf-8', errors='replace') as f:
+            with open(LOG_PATH, 'r', encoding='utf-8', errors='replace') as f:
                 # 检查文件是否被截断或替换 (例如日志轮转)
                 # 通过 seek(0, 2) 获取当前文件大小
                 current_file_size = f.seek(0, os.SEEK_END)
@@ -163,7 +181,7 @@ class MainWindow(QMainWindow):
         except FileNotFoundError: # 这个理论上在上面的 os.path.exists 检查后不应频繁触发
             if not self.file_not_found_message_shown:
                 timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
-                self.log_display.setPlainText(f"[{timestamp}] 错误: 日志文件 '{self.log_file_path}' 再次检查时未找到。\n")
+                self.log_display.setPlainText(f"[{timestamp}] 错误: 日志文件 '{LOG_PATH}' 再次检查时未找到。\n")
                 self.file_not_found_message_shown = True
             self.last_read_position = 0
         except IOError as e:
@@ -182,8 +200,6 @@ class MainWindow(QMainWindow):
     def initLogTab(self):
         self.log_tab = Widget("Log", self)
         self.log_layout = self.log_tab.vBoxLayout
-
-        self.log_file_path = LOG_PATH  # 日志文件路径
         self.log_layout.addWidget(BodyLabel("📜 日志文件"))
 
         # log
@@ -307,38 +323,33 @@ class MainWindow(QMainWindow):
         self.settings_layout.addWidget(self.input_lang)
 
         # Translator Section
-        self.settings_layout.addWidget(BodyLabel("🚀 选择用于在线翻译的模型类别。"))
+        self.settings_layout.addWidget(BodyLabel("🚀 选择用于翻译的模型类别。"))
         self.translator_group = QComboBox()
         self.translator_group.addItems(TRANSLATOR_SUPPORTED)
         self.settings_layout.addWidget(self.translator_group)
         
-        self.settings_layout.addWidget(BodyLabel("🚀 在线模型令牌（如果选择在线模型）"))
+        self.settings_layout.addWidget(BodyLabel("🚀 在线模型令牌"))
         self.gpt_token = QLineEdit()
         self.gpt_token.setPlaceholderText("留空为使用上次配置的Token。")
         self.settings_layout.addWidget(self.gpt_token)
 
-        self.settings_layout.addWidget(BodyLabel("🚀 自定义OpenAI地址 (请选择gpt-custom)"))
+        self.settings_layout.addWidget(BodyLabel("🚀 在线模型名称"))
+        self.gpt_model = QLineEdit()
+        self.gpt_model.setPlaceholderText("例如：deepseek-chat")
+        self.settings_layout.addWidget(self.gpt_model)
+
+        self.settings_layout.addWidget(BodyLabel("🚀 自定义API地址（gpt-custom）"))
         self.gpt_address = QLineEdit()
         self.gpt_address.setPlaceholderText("例如：http://127.0.0.1:11434")
         self.settings_layout.addWidget(self.gpt_address)
-
-        self.settings_layout.addWidget(BodyLabel("🚀 自定义OpenAI模型 (请选择gpt-custom)"))
-        self.gpt_model = QLineEdit()
-        self.gpt_model.setPlaceholderText("例如：qwen2.5")
-        self.settings_layout.addWidget(self.gpt_model)
-
-        self.settings_layout.addWidget(BodyLabel("💻 选择用于离线翻译的模型类别。"))
-        self.translator_group_local = QComboBox()
-        self.translator_group_local.addItems(TRANSLATOR_SUPPORTED_LOCAL)
-        self.settings_layout.addWidget(self.translator_group_local)
         
-        self.settings_layout.addWidget(BodyLabel("💻 离线模型文件（如果选择离线模型）"))
+        self.settings_layout.addWidget(BodyLabel("💻 离线模型文件（galtransl， sakura）"))
         self.sakura_file = QComboBox()
         sakura_lst = [i for i in os.listdir('llama') if i.endswith('gguf')]
         self.sakura_file.addItems(sakura_lst)
         self.settings_layout.addWidget(self.sakura_file)
         
-        self.settings_layout.addWidget(BodyLabel("💻 离线模型参数（越大表示使用GPU越多）: "))
+        self.settings_layout.addWidget(BodyLabel("💻 离线模型参数 "))
         self.sakura_value = QLineEdit()
         self.sakura_value.setPlaceholderText("100")
         self.sakura_value.setReadOnly(True)
@@ -530,7 +541,6 @@ class MainWorker(QObject):
         self.status.emit("[INFO] 正在读取配置...")
         whisper_file = self.master.whisper_file.currentText()
         translator = self.master.translator_group.currentText()
-        translator_local = self.master.translator_group_local.currentText()
         language = self.master.input_lang.currentText()
         gpt_token = self.master.gpt_token.text()
         gpt_address = self.master.gpt_address.text()
@@ -544,7 +554,29 @@ class MainWorker(QObject):
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{translator_local}\n{summary_address}\n{summary_model}\n{summary_token}\n")
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{summary_address}\n{summary_model}\n{summary_token}\n")
+
+        # save whisper param
+        with open('whisper/param.txt', 'w', encoding='utf-8') as f:
+            f.write(self.master.param_whisper.toPlainText())
+
+        # save llama param
+        with open('llama/param.txt', 'w', encoding='utf-8') as f:
+            f.write(self.master.param_llama.toPlainText())
+
+        # save before dict
+        with open('project/dict_pre.txt', 'w', encoding='utf-8') as f:
+            f.write(self.master.before_dict.toPlainText())
+
+        # save gpt dict
+        with open('project/dict_gpt.txt', 'w', encoding='utf-8') as f:
+            f.write(self.master.gpt_dict.toPlainText())
+
+        # save after dict
+        with open('project/dict_after.txt', 'w', encoding='utf-8') as f:
+            f.write(self.master.after_dict.toPlainText())
+
+        self.status.emit("[INFO] 配置保存完成！")
 
     @error_handler
     def summarize(self):
@@ -656,7 +688,6 @@ class MainWorker(QObject):
         yt_url = self.master.yt_url.toPlainText()
         whisper_file = self.master.whisper_file.currentText()
         translator = self.master.translator_group.currentText()
-        translator_local = self.master.translator_group_local.currentText()
         language = self.master.input_lang.currentText()
         gpt_token = self.master.gpt_token.text()
         gpt_address = self.master.gpt_address.text()
@@ -675,8 +706,6 @@ class MainWorker(QObject):
 
         with open('llama/param.txt', 'w', encoding='utf-8') as f:
             f.write(param_llama)
-
-        translator = translator if translator != '不进行翻译' else translator_local
 
         self.status.emit("[INFO] 正在初始化项目文件夹...")
 
@@ -724,20 +753,16 @@ class MainWorker(QObject):
                     gpt_address = 'https://api.openai.com'
                 if not gpt_model:
                     gpt_model = ''
-                if not gpt_token:
-                    gpt_token = 'sk-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
                 if 'GPT35:' in line:
-                    lines[idx+4] = f"      - token: {gpt_token}\n"
-                    lines[idx+6] = f"    defaultEndpoint: {gpt_address}\n"
-                    lines[idx+7] = f'    rewriteModelName: "{gpt_model}"\n'
-                if 'GPT4: # GPT4 API' in line:
                     lines[idx+2] = f"      - token: {gpt_token}\n"
                     lines[idx+4] = f"    defaultEndpoint: {gpt_address}\n"
-            if 'deepseek' in translator:
-                if 'GPT35:' in line:
-                    lines[idx+4] = f"      - token: {gpt_token}\n"
-                    lines[idx+6] = f"    defaultEndpoint: https://api.deepseek.com\n"
-                    lines[idx+7] = f'    rewriteModelName: "{translator}"\n'
+                    lines[idx+5] = f'    rewriteModelName: "{gpt_model}"\n'
+            for name, api in ONLINE_TRANSLATOR_MAPPING.items():
+                if name == translator:
+                    if 'GPT35:' in line:
+                        lines[idx+2] = f"      - token: {gpt_token}\n"
+                        lines[idx+4] = f"    defaultEndpoint: {api}\n"
+                        lines[idx+5] = f'    rewriteModelName: "{gpt_model}"\n'
             if proxy_address:
                 if 'proxy' in line:
                     lines[idx+1] = f"  enableProxy: true\n"
@@ -746,11 +771,10 @@ class MainWorker(QObject):
                 if 'proxy' in line:
                     lines[idx+1] = f"  enableProxy: false\n"
 
-        if 'gpt-custom' in translator or 'deepseek' in translator:
-            translator = 'gpt35-1106'
-
         if 'galtransl' in translator:
             translator = 'sakura-010'
+        elif 'sakura' not in translator:
+            translator = 'gpt35-1106'
 
         with open('project/config.yaml', 'w', encoding='utf-8') as f:
             f.writelines(lines)
@@ -862,10 +886,6 @@ class MainWorker(QObject):
         self.finished.emit()
 
 if __name__ == "__main__":
-    # redirect sys.stdout and sys.stderr to one log file
-    sys.stdout = open(LOG_PATH, 'w', encoding='utf-8')
-    sys.stderr = sys.stdout
-
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
     app = QApplication(sys.argv)
     main_window = MainWindow()
