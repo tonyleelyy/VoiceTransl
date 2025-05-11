@@ -3,9 +3,9 @@ import sys, os
 os.chdir(sys._MEIPASS)
 import shutil
 from PyQt5 import QtGui, QtCore
-from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime
 from PyQt5.QtWidgets import QApplication, QVBoxLayout, QFileDialog, QFrame
-from qfluentwidgets import PushButton as QPushButton, TextEdit as QTextEdit, LineEdit as QLineEdit, ComboBox as QComboBox, Slider as QSlider, FluentWindow as QMainWindow
+from qfluentwidgets import PushButton as QPushButton, TextEdit as QTextEdit, LineEdit as QLineEdit, ComboBox as QComboBox, Slider as QSlider, FluentWindow as QMainWindow, PlainTextEdit as QPlainTextEdit
 from qfluentwidgets import FluentIcon, NavigationItemPosition, SubtitleLabel, TitleLabel, BodyLabel
 
 import re
@@ -36,6 +36,8 @@ TRANSLATOR_SUPPORTED_LOCAL = [
     "qwen-local",
 ]
 
+LOG_PATH = 'log.txt'
+
 class Widget(QFrame):
 
     def __init__(self, text: str, parent=None):
@@ -59,9 +61,11 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QtGui.QIcon('icon.png'))
         self.resize(800, 600)
         self.initUI()
+        self.setup_timer()
         
     def initUI(self):
         self.initInputOutputTab()
+        self.initLogTab()
         self.initSettingsTab()
         self.initAdvancedSettingTab()
         self.initDictTab()
@@ -109,6 +113,87 @@ class MainWindow(QMainWindow):
             with open('llama/param.txt', 'r', encoding='utf-8') as f:
                 self.param_llama.setPlainText(f.read())
 
+    def setup_timer(self):
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.read_log_file)
+        self.timer.start(1000)
+        self.last_read_position = 0
+        self.file_not_found_message_shown = False
+
+    def read_log_file(self):
+        """读取日志文件并更新显示"""
+        try:
+            # 检查文件是否存在
+            if not os.path.exists(self.log_file_path):
+                if not self.file_not_found_message_shown:
+                    timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
+                    self.log_display.setPlainText(f"[{timestamp}] 错误: 日志文件 '{self.log_file_path}' 未找到。正在等待文件创建...\n")
+                    self.file_not_found_message_shown = True
+                self.last_read_position = 0 # 如果文件消失了，重置读取位置
+                return
+
+            # 如果文件之前未找到但现在找到了
+            if self.file_not_found_message_shown:
+                self.log_display.clear() # 清除之前的错误信息
+                self.file_not_found_message_shown = False
+                self.last_read_position = 0 # 从头开始读
+
+            with open(self.log_file_path, 'r', encoding='utf-8', errors='replace') as f:
+                # 检查文件是否被截断或替换 (例如日志轮转)
+                # 通过 seek(0, 2) 获取当前文件大小
+                current_file_size = f.seek(0, os.SEEK_END)
+                if current_file_size < self.last_read_position:
+                    # 文件变小了，意味着文件被截断或替换了
+                    timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
+                    self.log_display.appendPlainText(f"\n[{timestamp}] 检测到日志文件截断或轮转。从头开始读取...\n")
+                    self.last_read_position = 0
+                    # 可以选择清空显示: self.log_display.clear()
+                    # 但通常追加提示然后从头读新内容更好
+
+                f.seek(self.last_read_position)
+                new_content = f.read()
+                if new_content:
+                    self.log_display.appendPlainText(new_content) # appendPlainText 会自动处理换行
+                    # 自动滚动到底部
+                    scrollbar = self.log_display.verticalScrollBar()
+                    scrollbar.setValue(scrollbar.maximum())
+
+                self.last_read_position = f.tell() # 更新下次读取的起始位置
+
+        except FileNotFoundError: # 这个理论上在上面的 os.path.exists 检查后不应频繁触发
+            if not self.file_not_found_message_shown:
+                timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
+                self.log_display.setPlainText(f"[{timestamp}] 错误: 日志文件 '{self.log_file_path}' 再次检查时未找到。\n")
+                self.file_not_found_message_shown = True
+            self.last_read_position = 0
+        except IOError as e:
+            timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
+            self.log_display.appendPlainText(f"[{timestamp}] 读取日志文件IO错误: {e}\n")
+            # 可以考虑在IO错误时停止timer或做其他处理
+        except Exception as e:
+            timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
+            self.log_display.appendPlainText(f"[{timestamp}] 读取日志文件时发生未知错误: {e}\n")
+
+    def closeEvent(self, event):
+        """确保在关闭窗口时停止定时器"""
+        self.timer.stop()
+        event.accept()
+
+    def initLogTab(self):
+        self.log_tab = Widget("Log", self)
+        self.log_layout = self.log_tab.vBoxLayout
+
+        self.log_file_path = LOG_PATH  # 日志文件路径
+        self.log_layout.addWidget(BodyLabel("📜 日志文件"))
+
+        # log
+        self.log_display = QPlainTextEdit(self)
+        self.log_display.setReadOnly(True)
+        self.log_display.setStyleSheet("font-family: Consolas, Monospace; font-size: 10pt;") # 设置等宽字体
+        self.log_layout.addWidget(self.log_display)
+
+        self.addSubInterface(self.log_tab, FluentIcon.INFO, "日志", NavigationItemPosition.TOP)
+
     def initAboutTab(self):
         self.about_tab = Widget("About", self)
         self.about_layout = self.about_tab.vBoxLayout
@@ -137,7 +222,7 @@ class MainWindow(QMainWindow):
         self.disclaimer_text.setPlainText("本程序仅供学习交流使用，不得用于商业用途。请遵守当地法律法规，不得传播色情、暴力、恐怖等违法违规内容。本软件不对任何使用者的行为负责，不保证翻译结果的准确性。使用本软件即代表您同意自行承担使用本软件的风险，包括但不限于版权风险、法律风险等。")
         self.about_layout.addWidget(self.disclaimer_text)
 
-        self.addSubInterface(self.about_tab, FluentIcon.INFO, "关于", NavigationItemPosition.TOP)
+        self.addSubInterface(self.about_tab, FluentIcon.HEART, "关于", NavigationItemPosition.TOP)
         
     def initInputOutputTab(self):
         self.input_output_tab = Widget("Home", self)
@@ -718,14 +803,11 @@ class MainWorker(QObject):
                     self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
                     continue
 
-                if input_file.endswith('.wav'):
-                    input_file = input_file[:-4]
-                else:
-                    self.status.emit("[INFO] 正在进行音频提取...")
-                    self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'])
-                    self.pid.wait()
-                    self.pid.kill()
-                    self.pid.terminate()
+                self.status.emit("[INFO] 正在进行音频提取...")
+                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'], stdout=sys.stdout, stderr=sys.stdout)
+                self.pid.wait()
+                self.pid.kill()
+                self.pid.terminate()
 
                 if not os.path.exists(input_file+'.wav'):
                     self.status.emit("[ERROR] 音频提取失败，请检查文件格式！")
@@ -734,9 +816,9 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 正在进行语音识别...")
 
                 if whisper_file.startswith('ggml'):
-                    self.pid = subprocess.Popen(['whisper/whisper-cli', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file]+param_whisper.split())
+                    self.pid = subprocess.Popen(['whisper/whisper-cli', '-m', 'whisper/'+whisper_file, '-osrt', '-l', language, input_file+'.wav', '-of', input_file]+param_whisper.split(), stdout=sys.stdout, stderr=sys.stdout)
                 elif whisper_file.startswith('faster-whisper'):
-                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--beep_off', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', language, '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav']+param_whisper.split())
+                    self.pid = subprocess.Popen(['Whisper-Faster/whisper-faster.exe', '--beep_off', '--verbose', 'True', '--model', whisper_file[15:], '--model_dir', 'Whisper-Faster', '--task', 'transcribe', '--language', language, '--output_format', 'srt', '--output_dir', os.path.dirname(input_file), input_file+'.wav']+param_whisper.split(), stdout=sys.stdout, stderr=sys.stdout)
                 else:
                     self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
                     continue
@@ -762,7 +844,7 @@ class MainWorker(QObject):
                     self.status.emit("[INFO] 未选择模型文件，跳过翻译步骤...")
                     continue
 
-                self.pid = subprocess.Popen(['llama/llama-server', '-m', 'llama/'+sakura_file, '-ngl' , str(sakura_mode), '--port', '8989']+param_llama.split())
+                self.pid = subprocess.Popen(['llama/llama-server', '-m', 'llama/'+sakura_file, '-ngl' , str(sakura_mode), '--port', '8989']+param_llama.split(), stdout=sys.stdout, stderr=sys.stdout)
 
             self.status.emit("[INFO] 正在进行翻译...")
             worker('project', 'config.yaml', translator, show_banner=False)
@@ -780,6 +862,10 @@ class MainWorker(QObject):
         self.finished.emit()
 
 if __name__ == "__main__":
+    # redirect sys.stdout and sys.stderr to one log file
+    sys.stdout = open(LOG_PATH, 'w', encoding='utf-8')
+    sys.stderr = sys.stdout
+
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
     app = QApplication(sys.argv)
     main_window = MainWindow()
