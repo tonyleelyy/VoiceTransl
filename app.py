@@ -3,9 +3,9 @@ import sys, os
 os.chdir(sys._MEIPASS)
 import shutil
 from PyQt5 import QtGui, QtCore
-from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime
+from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime, QSize
 from PyQt5.QtWidgets import QApplication, QVBoxLayout, QFileDialog, QFrame
-from qfluentwidgets import PushButton as QPushButton, TextEdit as QTextEdit, LineEdit as QLineEdit, ComboBox as QComboBox, Slider as QSlider, FluentWindow as QMainWindow, PlainTextEdit as QPlainTextEdit
+from qfluentwidgets import PushButton as QPushButton, TextEdit as QTextEdit, LineEdit as QLineEdit, ComboBox as QComboBox, Slider as QSlider, FluentWindow as QMainWindow, PlainTextEdit as QPlainTextEdit, SplashScreen
 from qfluentwidgets import FluentIcon, NavigationItemPosition, SubtitleLabel, TitleLabel, BodyLabel
 
 import re
@@ -63,15 +63,19 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.thread = None
         self.worker = None
-
         self.setWindowTitle("VoiceTransl")
-        self.status.connect(lambda x: self.setWindowTitle(f"VoiceTransl - {x}"))
         self.setWindowIcon(QtGui.QIcon('icon.png'))
+        self.status.connect(lambda x: self.setWindowTitle(f"VoiceTransl - {x}"))
         self.resize(800, 600)
+        self.splashScreen = SplashScreen(self.windowIcon(), self)
+        self.splashScreen.setIconSize(QSize(102, 102))
+        self.show()
         self.initUI()
         self.setup_timer()
+        self.splashScreen.finish()
         
     def initUI(self):
+        self.initAboutTab()
         self.initInputOutputTab()
         self.initLogTab()
         self.initSettingsTab()
@@ -79,7 +83,6 @@ class MainWindow(QMainWindow):
         self.initDictTab()
         self.initToolTab()
         self.initSummarizeTab()
-        self.initAboutTab()
 
         # load config
         if os.path.exists('config.txt'):
@@ -219,28 +222,49 @@ class MainWindow(QMainWindow):
         self.about_layout = self.about_tab.vBoxLayout
 
         # introduce
-        self.about_layout.addWidget(TitleLabel("📖 关于"))
+        self.about_layout.addWidget(TitleLabel("🎉 感谢使用VoiceTransl！"))
         self.introduce_text = QTextEdit()
         self.introduce_text.setReadOnly(True)
-        self.introduce_text.setPlainText("VoiceTransl（原Galtransl for ASMR）是一个离线AI视频字幕生成和翻译软件，您可以使用本程序从外语音视频文件/字幕文件生成中文字幕文件。项目地址及使用说明: https://github.com/shinnpuru/VoiceTransl。")
+        self.introduce_text.setPlainText(
+"""
+VoiceTransl（原Galtransl for ASMR）是一个开源免费的离线AI视频字幕生成和翻译软件，您可以使用本程序从外语音视频文件/字幕文件生成中文字幕文件。
+
+项目地址及使用说明: https://github.com/shinnpuru/VoiceTransl。
+B站教程：https://space.bilibili.com/36464441/lists/3239068。
+""")
         self.about_layout.addWidget(self.introduce_text)
 
         # mode
         self.about_layout.addWidget(TitleLabel("🔧 模式说明"))
         self.mode_text = QTextEdit()
         self.mode_text.setReadOnly(True)
-        self.mode_text.setPlainText("""（1）仅下载模式：选择不进行听写和不进行翻译；
-（2）仅听写模式：选择不进行翻译，并且选择听写模型；
+        self.mode_text.setPlainText(
+"""
+（1）仅下载模式：选择不进行听写和不进行翻译；
+（2）仅听写模式：选择听写模型，选择不进行翻译；
 （3）仅翻译模式：上传SRT文件，并且选择翻译模型；  
-（4）完整模式：选择所有功能。   """)
+（4）完整模式：选择所有功能。
+""")
         self.about_layout.addWidget(self.mode_text)
 
         # disclaimer
-        self.about_layout.addWidget(TitleLabel("⚠️ 免责声明"))
+        self.about_layout.addWidget(TitleLabel("🎇 支持昕蒲"))
         self.disclaimer_text = QTextEdit()
         self.disclaimer_text.setReadOnly(True)
-        self.disclaimer_text.setPlainText("本程序仅供学习交流使用，不得用于商业用途。请遵守当地法律法规，不得传播色情、暴力、恐怖等违法违规内容。本软件不对任何使用者的行为负责，不保证翻译结果的准确性。使用本软件即代表您同意自行承担使用本软件的风险，包括但不限于版权风险、法律风险等。")
+        self.disclaimer_text.setPlainText(
+"""
+如果您喜欢这个项目并希望支持开发，欢迎通过以下方式赞助：
+1. 爱发电: https://afdian.com/a/shinnpuru（微信和支付宝）
+2. B站充电: https://space.bilibili.com/36464441（大会员可用免费B币）
+3. Ko-fi: https://ko-fi.com/U7U018MISY（PayPal及信用卡）
+您的支持将帮助昕蒲持续改进和维护这个项目！
+""")
         self.about_layout.addWidget(self.disclaimer_text)
+
+        # start
+        self.start_button = QPushButton("🚀 开始")
+        self.start_button.clicked.connect(lambda: self.switchTo(self.input_output_tab))
+        self.about_layout.addWidget(self.start_button)
 
         self.addSubInterface(self.about_tab, FluentIcon.HEART, "关于", NavigationItemPosition.TOP)
         
@@ -257,7 +281,7 @@ class MainWindow(QMainWindow):
         self.input_output_layout.addWidget(self.input_files_list)
 
         # YouTube URL Section
-        self.input_output_layout.addWidget(BodyLabel("🔗 或者输入B站视频BV号或者YouTube视频链接。"))
+        self.input_output_layout.addWidget(BodyLabel("🔗 或者输入B站视频BV号或者YouTube及其他视频链接（每行一个）。"))
         self.yt_url = QTextEdit()
         self.yt_url.setAcceptDrops(False)
         self.yt_url.setPlaceholderText("例如：https://www.youtube.com/watch?v=...\n例如：BV1Lxt5e8EJF")
@@ -308,7 +332,7 @@ class MainWindow(QMainWindow):
         self.after_dict.setPlaceholderText("中文\t中文\n中文\t中文")
         self.dict_layout.addWidget(self.after_dict)
 
-        self.addSubInterface(self.dict_tab, FluentIcon.DICTIONARY, "字典", NavigationItemPosition.TOP)
+        self.addSubInterface(self.dict_tab, FluentIcon.DICTIONARY, "字典设置", NavigationItemPosition.TOP)
         
     def initSettingsTab(self):
         self.settings_tab = Widget("Settings", self)
@@ -396,7 +420,7 @@ class MainWindow(QMainWindow):
         self.param_llama.setPlaceholderText("每个参数空格隔开，请参考Llama.cpp文档，不清楚请保持默认。")
         self.advanced_settings_layout.addWidget(self.param_llama)
 
-        self.addSubInterface(self.advanced_settings_tab, FluentIcon.ASTERISK, "高级设置", NavigationItemPosition.TOP)
+        self.addSubInterface(self.advanced_settings_tab, FluentIcon.COMMAND_PROMPT, "命令参数", NavigationItemPosition.TOP)
 
     def initToolTab(self):
         self.tool_tab = Widget("Tool", self)
