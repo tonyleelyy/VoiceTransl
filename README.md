@@ -8,20 +8,20 @@ VoiceTransl是一站式离线AI视频字幕生成和翻译软件，从视频下�
 
 ## 特色
 
-* 支持多种翻译模型，包括在线模型（Deepseek及任意OpenAI兼容接口）和本地模型（Sakura、Galtransl及任意llama.cpp，Ollama模型）。
+* 支持多种翻译模型，包括在线模型（任意OpenAI兼容接口）和本地模型（Sakura、Galtransl及Ollama）。
 * 支持AMD/NVIDIA/Intel GPU加速，翻译引擎支持调整显存占用。
 * 支持多种输入格式，包括音频、视频、SRT字幕。
 * 支持多种输出格式，包括SRT字幕、LRC字幕。
 * 支持多种语言，包括日语，英语，韩语，俄语，法语。
 * 支持字典功能，可以自定义翻译字典，替换输入输出。
-* 支持从YouTube/Bilibili直接下载视频。
+* 支持从YouTube/Bilibili及媒体链接直接下载视频。
 * 支持文件和链接批量处理，自动识别文件类型。
 * 支持音频切分，字幕合并和视频合成。
 * 支持字幕总结，可以自定义Prompt。
 
 ## 下载
 
-从Release页面下载最新版本的[VoiceTransl](https://github.com/shinnpuru/VoiceTransl/releases)，解压后运行`app.exe`。
+下载最新版本的[VoiceTransl](https://github.com/shinnpuru/VoiceTransl/releases/)，解压后运行`VoiceTransl.exe`。
 
 ## 听写
 
@@ -55,17 +55,18 @@ faster-whisper-xxx/
 
 ## 在线翻译
 
-* 在线翻译模型支持DeepSeek（`deepseek-chat`）以及任意的OpenAI兼容接口。请使用`gpt-custom`，配置自定义OpenAI地址（例如`https://api.openai.com`，默认会自动添加`/v1/chat/completions`），并填写自定义OpenAI模型。
+本项目支持以下在线模型API接口，需要填写模型名称和Token。
 
-* 以下是一些OpenAI兼容接口的地址：
-  
-  * [Moonshot系列](https://platform.moonshot.cn/)请使用`https://api.moonshot.cn`作为地址。
-  * [GLM系列](https://open.bigmodel.cn)请使用`https://open.bigmodel.cn/api/paas`作为地址，特殊后缀已支持。
-  * [Minimax系列](https://platform.minimaxi.com/)请使用`https://api.minimax.chat`作为地址，特殊后缀已支持。
-  * [Doubao系列](https://doubao.ai)请使用`https://ark.cn-beijing.volces.com/api`作为地址，特殊后缀已支持。
-  * [Qwen系列](https://help.aliyun.com/zh/model-studio/developer-reference/use-qwen-by-calling-api)请使用`https://dashscope.aliyuncs.com/compatible-mode`作为地址。
-  * [Gemini系列](https://www.gemini.ai)请使用`https://generativelanguage.googleapis.com`作为地址，特殊后缀已支持。
-  * [Ollama引擎](https://ollama.com/blog/openai-compatibility)请使用`http://localhost:11434`。
+  * [DeepSeek系列](https://platform.deepseek.com/)
+  * [Moonshot系列](https://platform.moonshot.cn/)
+  * [GLM系列](https://open.bigmodel.cn)
+  * [Minimax系列](https://platform.minimaxi.com/)
+  * [Doubao系列](https://doubao.ai)
+  * [Qwen系列](https://help.aliyun.com/zh/model-studio/developer-reference/use-qwen-by-calling-api)
+  * [Gemini系列](https://www.gemini.ai)
+  * [Ollama引擎](https://ollama.com/blog/openai-compatibility)
+
+其他模型请使用`gpt-custom`兼容接口并配置自定义OpenAI地址（例如`https://api.openai.com`，默认会自动添加`/v1/chat/completions`）。
 
 ## 离线翻译
 
@@ -78,15 +79,13 @@ cudart-llama-bin-win-cu12.4-x64.zip
 llama-bxxxx-bin-win-cuda-cu12.4-x64.zip
 ```
 
-* 模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。选择模型的时候请使用对应代码，并选择模型。非日语模型请使用`qwen-local`作为代码。
+* 模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。选择模型的时候请使用对应代码，并选择模型。非日语模型，如Qwen和Gemma，请使用[Ollama](https://ollama.com/blog/openai-compatibility)部署。
 
 | 名称 | 语言 | 代码 | 磁盘    | 显存     | 链接 |
 | ------ | ------ | ------ |  ------- | ------- | ----- |
 | [Sakura-7B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM) | 日语 | sakura-010 |  ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-7B-Qwen2.5-v1.0-GGUF) |
 | [Sakura-GalTransl-7B-v3](https://github.com/xd2333/GalTransl) | 日语 | galtransl | ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-GalTransl-7B-v3) |
 | [Sakura-14B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM) | 日语 |  sakura-010 | ~9 GiB | ~16 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF) |
-| [Qwen-2.5-7B-Q4](https://github.com/QwenLM/Qwen2.5) | 英语 |  qwen-local | ~5 GiB | ~8 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF) |
-| [Qwen-2.5-14B-Q4](https://github.com/QwenLM/Qwen2.5) | 英语 |  qwen-local | ~9 GiB | ~16 GB | [下载](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF) |
 
 ## 模式
 
