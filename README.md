@@ -8,7 +8,7 @@ VoiceTransl是一站式离线AI视频字幕生成和翻译软件，从视频下�
 
 ## 特色
 
-* 支持多种翻译模型，包括在线模型（任意OpenAI兼容接口）和本地模型（Sakura、Galtransl及Ollama）。
+* 支持多种翻译模型，包括在线模型（任意OpenAI兼容接口）和本地模型（Sakura、Galtransl及Ollama、Llamacpp）。
 * 支持AMD/NVIDIA/Intel GPU加速，翻译引擎支持调整显存占用。
 * 支持多种输入格式，包括音频、视频、SRT字幕。
 * 支持多种输出格式，包括SRT字幕、LRC字幕。
@@ -79,7 +79,7 @@ cudart-llama-bin-win-cu12.4-x64.zip
 llama-bxxxx-bin-win-cuda-cu12.4-x64.zip
 ```
 
-* 模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。选择模型的时候请使用对应代码，并选择模型。非日语模型，如Qwen和Gemma，请使用[Ollama](https://ollama.com/blog/openai-compatibility)部署。
+* 模型需要自行下载，请选择合适的llama.cpp模型下载然后放到`llama`文件夹。选择模型的时候请使用对应代码，并选择模型。非日语模型，如Qwen和Gemma，请选择`llamacpp`。
 
 | 名称 | 语言 | 代码 | 磁盘    | 显存     | 链接 |
 | ------ | ------ | ------ |  ------- | ------- | ----- |
