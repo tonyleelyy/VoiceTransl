@@ -30,7 +30,8 @@ ONLINE_TRANSLATOR_MAPPING = {
     'doubao': 'https://ark.cn-beijing.volces.com/api',
     'aliyun': 'https://dashscope.aliyuncs.com/compatible-mode',
     'gemini': 'https://generativelanguage.googleapis.com',
-    'ollama': 'http://localhost:11434'
+    'ollama': 'http://localhost:11434',
+    'llamacpp': 'http://localhost:8989',
 }
 
 TRANSLATOR_SUPPORTED = [
@@ -273,7 +274,7 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
         self.input_output_layout = self.input_output_tab.vBoxLayout
         
         # Input Section
-        self.input_output_layout.addWidget(BodyLabel("📂 请拖拽音视频文件/SRT文件到这里（可多选）。"))
+        self.input_output_layout.addWidget(BodyLabel("📂 请拖拽音视频文件/SRT文件到这里，可多选，路径请勿包含非英文和空格。"))
         self.input_files_list = QTextEdit()
         self.input_files_list.setAcceptDrops(True)
         self.input_files_list.dropEvent = lambda e: self.input_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
@@ -378,13 +379,13 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
         self.gpt_address.setPlaceholderText("例如：http://127.0.0.1:11434")
         self.settings_layout.addWidget(self.gpt_address)
         
-        self.settings_layout.addWidget(BodyLabel("💻 离线模型文件（galtransl， sakura）"))
+        self.settings_layout.addWidget(BodyLabel("💻 离线模型文件（galtransl， sakura，llamacpp）"))
         self.sakura_file = QComboBox()
         sakura_lst = [i for i in os.listdir('llama') if i.endswith('gguf')]
         self.sakura_file.addItems(sakura_lst)
         self.settings_layout.addWidget(self.sakura_file)
         
-        self.settings_layout.addWidget(BodyLabel("💻 离线模型参数（galtransl， sakura）"))
+        self.settings_layout.addWidget(BodyLabel("💻 离线模型参数（galtransl， sakura，llamacpp）"))
         self.sakura_value = QLineEdit()
         self.sakura_value.setPlaceholderText("100")
         self.sakura_value.setReadOnly(True)
@@ -819,11 +820,6 @@ class MainWorker(QObject):
                 if 'proxy' in line:
                     lines[idx+1] = f"  enableProxy: false\n"
 
-        if 'galtransl' in translator:
-            translator = 'sakura-010'
-        elif 'sakura' not in translator:
-            translator = 'gpt35-1106'
-
         with open('project/config.yaml', 'w', encoding='utf-8') as f:
             f.writelines(lines)
 
@@ -872,7 +868,7 @@ class MainWorker(QObject):
                     continue
 
                 self.status.emit("[INFO] 正在进行音频提取...")
-                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'], stdout=sys.stdout, stderr=sys.stdout)
+                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', input_file+'.wav'], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
@@ -885,10 +881,10 @@ class MainWorker(QObject):
 
                 if whisper_file.startswith('ggml'):
                     print(param_whisper)
-                    self.pid = subprocess.Popen([param.replace('$whisper_file',whisper_file).replace('$input_file',input_file).replace('$language',language) for param in param_whisper.split()], stdout=sys.stdout, stderr=sys.stdout)
+                    self.pid = subprocess.Popen([param.replace('$whisper_file',whisper_file).replace('$input_file',input_file).replace('$language',language) for param in param_whisper.split()], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
                 elif whisper_file.startswith('faster-whisper'):
                     print(param_whisper_faster)
-                    self.pid = subprocess.Popen([param.replace('$whisper_file',whisper_file[15:]).replace('$input_file',input_file).replace('$language',language).replace('$output_dir',os.path.dirname(input_file)) for param in param_whisper.split()]+param_whisper_faster.split(), stdout=sys.stdout, stderr=sys.stdout)
+                    self.pid = subprocess.Popen([param.replace('$whisper_file',whisper_file[15:]).replace('$input_file',input_file).replace('$language',language).replace('$output_dir',os.path.dirname(input_file)) for param in param_whisper_faster.split()], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
                 else:
                     self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
                     continue
@@ -908,14 +904,19 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 听写语言为中文，跳过翻译步骤...")
                 continue
 
-            if 'sakura' in translator or 'qwen' in translator:
+            if 'sakura' in translator or 'llamacpp' in translator or 'galtransl' in translator:
                 self.status.emit("[INFO] 正在启动Sakura翻译器...")
                 if not sakura_file:
                     self.status.emit("[INFO] 未选择模型文件，跳过翻译步骤...")
                     continue
                 
                 print(param_llama)
-                self.pid = subprocess.Popen([param.replace('$model_file',sakura_file).replace('$model_layers',sakura_mode).replace('$port', 8989) for param in param_llama.split()], stdout=sys.stdout, stderr=sys.stdout)
+                self.pid = subprocess.Popen([param.replace('$model_file',sakura_file).replace('$num_layers',str(sakura_mode)).replace('$port', '8989') for param in param_llama.split()], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
+
+            if 'galtransl' in translator:
+                translator = 'sakura-010'
+            elif 'sakura' not in translator:
+                translator = 'gpt35-1106'
 
             self.status.emit("[INFO] 正在进行翻译...")
             worker('project', 'config.yaml', translator, show_banner=False)
