@@ -10,7 +10,9 @@ from qfluentwidgets import FluentIcon, NavigationItemPosition, SubtitleLabel, Ti
 
 import re
 import json
+import requests
 import subprocess
+from time import sleep
 from yt_dlp import YoutubeDL
 from bilibili_dl.bilibili_dl.Video import Video
 from bilibili_dl.bilibili_dl.downloader import download
@@ -747,6 +749,9 @@ class MainWorker(QObject):
         param_whisper_faster = self.master.param_whisper_faster.toPlainText()
         param_llama = self.master.param_llama.toPlainText()
 
+        if not gpt_token:
+            gpt_token = 'sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
             f.write(param_whisper)
 
@@ -808,6 +813,8 @@ class MainWorker(QObject):
                     lines[idx+5] = f'    rewriteModelName: "{gpt_model}"\n'
             for name, api in ONLINE_TRANSLATOR_MAPPING.items():
                 if name == translator:
+                    if 'llamacpp' in translator:
+                        gpt_model = sakura_file
                     if 'GPT35:' in line:
                         lines[idx+2] = f"      - token: {gpt_token}\n"
                         lines[idx+4] = f"    defaultEndpoint: {api}\n"
@@ -825,7 +832,7 @@ class MainWorker(QObject):
 
         for idx, input_file in enumerate(input_files):
             if not os.path.exists(input_file):
-                if 'BV' in input_file:
+                if input_file.startswith('BV'):
                     self.status.emit("[INFO] 正在下载视频...")
                     res = send_request(URL_VIDEO_INFO, params={'bvid': input_file})
                     download([Video(
@@ -912,6 +919,16 @@ class MainWorker(QObject):
                 
                 print(param_llama)
                 self.pid = subprocess.Popen([param.replace('$model_file',sakura_file).replace('$num_layers',str(sakura_mode)).replace('$port', '8989') for param in param_llama.split()], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
+                
+                self.status.emit("[INFO] 正在等待Sakura翻译器启动...")
+                while True:
+                    try:
+                        response = requests.get("http://localhost:8989")
+                        if response.status_code == 200:
+                            break
+                    except requests.exceptions.RequestException:
+                        pass
+                    sleep(1)
 
             if 'galtransl' in translator:
                 translator = 'sakura-010'
@@ -926,7 +943,8 @@ class MainWorker(QObject):
             make_lrc(output_file_path.replace('gt_input','gt_output'), input_file+'.lrc')
             self.status.emit("[INFO] 字幕文件生成完成！")
 
-            if 'sakura' in translator:
+            if 'sakura' in translator or 'llamacpp' in translator or 'galtransl' in translator:
+                self.status.emit("[INFO] 正在关闭Sakura翻译器...")
                 self.pid.kill()
                 self.pid.terminate()
 
