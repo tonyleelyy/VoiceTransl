@@ -86,6 +86,9 @@ llama-bxxxx-bin-win-cuda-cu12.4-x64.zip
 | [Sakura-7B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM) | 日语 | sakura-010 |  ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-7B-Qwen2.5-v1.0-GGUF) |
 | [Sakura-GalTransl-7B-v3](https://github.com/xd2333/GalTransl) | 日语 | galtransl | ~5 GiB | ~8 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-GalTransl-7B-v3) |
 | [Sakura-14B-v1.0-Q4](https://github.com/SakuraLLM/SakuraLLM) | 日语 |  sakura-010 | ~9 GiB | ~16 GB | [下载](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF) |
+| [Qwen3-8B-Q4](https://huggingface.co/Qwen/Qwen3-8B) | 多语种 | llamacpp | ~5 GiB | ~8 GB | [下载](https://huggingface.co/ggml-org/Qwen3-8B-GGUF) |
+| [Gemma3-12B-Q4](https://ai.google.dev/gemma/docs/core) | 多语种 | llamacpp |  ~7 GiB | ~14 GB | [下载](https://huggingface.co/ggml-org/gemma-3-12b-it-GGUF) |
+
 
 ## 模式
 
