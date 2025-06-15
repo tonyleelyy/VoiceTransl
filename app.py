@@ -20,8 +20,7 @@ from bilibili_dl.bilibili_dl.utils import send_request
 from bilibili_dl.bilibili_dl.constants import URL_VIDEO_INFO
 
 from prompt2srt import make_srt, make_lrc
-from srt2prompt import make_prompt
-from prompt2srt import make_srt
+from srt2prompt import make_prompt, merge_srt_files
 from GalTransl.__main__ import worker
 
 ONLINE_TRANSLATOR_MAPPING = {
@@ -869,6 +868,7 @@ class MainWorker(QObject):
                 output_file_path = os.path.join('project/gt_input', os.path.basename(input_file).replace('.srt','.json'))
                 make_prompt(input_file, output_file_path)
                 self.status.emit("[INFO] 字幕转换完成！")
+                input_file = input_file[:-4]
             else:
                 if whisper_file == '不进行听写':
                     self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
@@ -912,7 +912,7 @@ class MainWorker(QObject):
                 continue
 
             if 'sakura' in translator or 'llamacpp' in translator or 'galtransl' in translator:
-                self.status.emit("[INFO] 正在启动Sakura翻译器...")
+                self.status.emit("[INFO] 正在启动Llamacpp翻译器...")
                 if not sakura_file:
                     self.status.emit("[INFO] 未选择模型文件，跳过翻译步骤...")
                     continue
@@ -941,10 +941,11 @@ class MainWorker(QObject):
             self.status.emit("[INFO] 正在生成字幕文件...")
             make_srt(output_file_path.replace('gt_input','gt_output'), input_file+'.zh.srt')
             make_lrc(output_file_path.replace('gt_input','gt_output'), input_file+'.lrc')
+            merge_srt_files([input_file+'.srt',input_file+'.zh.srt'], input_file+'.merged.srt')
             self.status.emit("[INFO] 字幕文件生成完成！")
 
             if 'sakura' in translator or 'llamacpp' in translator or 'galtransl' in translator:
-                self.status.emit("[INFO] 正在关闭Sakura翻译器...")
+                self.status.emit("[INFO] 正在关闭Llamacpp翻译器...")
                 self.pid.kill()
                 self.pid.terminate()
 
