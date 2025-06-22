@@ -937,12 +937,14 @@ class MainWorker(QObject):
                     sleep(1)
 
             if 'galtransl' in translator:
-                translator = 'sakura-010'
+                worker_trans = 'sakura-010'
             elif 'sakura' not in translator:
-                translator = 'gpt35-1106'
+                worker_trans = 'gpt35-1106'
+            else:
+                worker_trans = translator
 
             self.status.emit("[INFO] 正在进行翻译...")
-            worker('project', 'config.yaml', translator, show_banner=False)
+            worker('project', 'config.yaml', worker_trans, show_banner=False)
 
             self.status.emit("[INFO] 正在生成字幕文件...")
             make_srt(output_file_path.replace('gt_input','gt_output'), input_file+'.zh.srt')
