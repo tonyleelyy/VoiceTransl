@@ -661,7 +661,7 @@ class MainWorker(QObject):
                 os.makedirs(os.path.join(*(input_file.split('.')[:-1])), exist_ok=True)
 
                 self.status.emit(f"[INFO] 正在进行音频提取...每{split_mode}秒分割一次")
-                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file,  '-f', 'segment', '-segment_time', str(split_mode), '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', os.path.join(*(input_file.split('.')[:-1]+['%04d.wav']))])
+                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file,  '-f', 'segment', '-segment_time', str(split_mode), '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', os.path.join(*(input_file.split('.')[:-1]+['%04d.wav']))], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
@@ -719,7 +719,7 @@ class MainWorker(QObject):
                 input_srt = shutil.copy(input_srt, 'project/cache/')
 
                 self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(video_files)}个")
-                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file,  '-vf', f'subtitles={input_srt}', '-c:v', 'libx264', '-c:a', 'copy', input_file+'_synth.mp4'])
+                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file,  '-vf', f'subtitles={input_srt}', '-c:v', 'libx264', '-c:a', 'copy', input_file+'_synth.mp4'], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
