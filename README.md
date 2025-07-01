@@ -116,11 +116,14 @@ llama-bxxxx-bin-win-cuda-cu12.4-x64.zip
 
 4. 不是Windows系统可以用吗
 
-Linux可以使用服务器部署进行运行，详细请参考[server分支](https://github.com/shinnpuru/GalTransl-for-ASMR/tree/server)。MacOS暂时不支持，用户可以使用[镜像部署](https://www.compshare.cn/images-detail?ImageID=compshareImage-16qc028dgfoh&ImageType=Community)。
+Linux可以使用服务器部署进行运行，详细请参考[server分支](https://github.com/shinnpuru/GalTransl-for-ASMR/tree/server)。MacOS暂时不支持。
 
-5. 没有显卡/手机可以用吗
+## 在线镜像
 
-可以使用在线镜像进行运行，不需要显卡，手机也可以用，详细请参考[镜像部署](https://www.compshare.cn/images-detail?ImageID=compshareImage-16qc028dgfoh&ImageType=Community)。
+打开即用的AI翻译，与配置环境说拜拜，推荐大家使用优云智算算力租赁平台。万卡4090 超多好玩免费的镜像给大家免费体验,高性价比算力租赁平台,上市公司ucloud旗下，专业有保障。
+镜像地址：https://www.compshare.cn/images-detail?ImageID=compshareImage-16qc028dgfoh
+视频教程：https://b23.tv/qN9bDHi
+使用昕蒲邀请链接注册可得实名20增金+链接注册20+高校企业认证再得10，还可享95折，4090一小时只要1.98 ：https://passport.compshare.cn/register?referral_code=1RFfR2FQ2FyEVRJMyrOn5d&ytag=simple_bilibili
 
 ## 开发
 
