@@ -1,6 +1,6 @@
 import sys, os
 
-os.chdir(sys._MEIPASS)
+# os.chdir(sys._MEIPASS)
 import shutil
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime, QSize
@@ -83,7 +83,8 @@ class MainWindow(QMainWindow):
         self.initSettingsTab()
         self.initAdvancedSettingTab()
         self.initDictTab()
-        self.initToolTab()
+        self.initClipTab()
+        self.initSynthTab()
         self.initSummarizeTab()
 
         # load config
@@ -321,17 +322,17 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
 
         self.dict_layout.addWidget(BodyLabel("📚 配置翻译前的字典。"))
         self.before_dict = QTextEdit()
-        self.before_dict.setPlaceholderText("日文\t日文\n日文\t日文")
+        self.before_dict.setPlaceholderText("日文原文(Tab键)日文替换词\n日文原文(Tab键)日文替换词")
         self.dict_layout.addWidget(self.before_dict)
         
         self.dict_layout.addWidget(BodyLabel("📚 配置翻译中的字典。"))
         self.gpt_dict = QTextEdit()
-        self.gpt_dict.setPlaceholderText("日文\t中文\n日文\t中文")
+        self.gpt_dict.setPlaceholderText("日文(Tab键)中文\n日文(Tab键)中文")
         self.dict_layout.addWidget(self.gpt_dict)
         
         self.dict_layout.addWidget(BodyLabel("📚 配置翻译后的字典。"))
         self.after_dict = QTextEdit()
-        self.after_dict.setPlaceholderText("中文\t中文\n中文\t中文")
+        self.after_dict.setPlaceholderText("中文原文(Tab键)中文替换词\n中文原文(Tab键)中文替换词")
         self.dict_layout.addWidget(self.after_dict)
 
         self.addSubInterface(self.dict_tab, FluentIcon.DICTIONARY, "字典设置", NavigationItemPosition.TOP)
@@ -424,52 +425,86 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
 
         self.addSubInterface(self.advanced_settings_tab, FluentIcon.COMMAND_PROMPT, "命令参数", NavigationItemPosition.TOP)
 
-    def initToolTab(self):
-        self.tool_tab = Widget("Tool", self)
-        self.tool_layout = self.tool_tab.vBoxLayout
+    def initClipTab(self):
+        self.clip_tab = Widget("Clip", self)
+        self.clip_layout = self.clip_tab.vBoxLayout
 
         # Split Section
-        self.tool_layout.addWidget(BodyLabel("🔪 分割合并工具"))
+        self.clip_layout.addWidget(BodyLabel("🔪 分割合并工具"))
         self.split_value = QLineEdit()
         self.split_value.setPlaceholderText("600")
         self.split_value.setReadOnly(True)
-        self.tool_layout.addWidget(self.split_value)
+        self.clip_layout.addWidget(self.split_value)
         self.split_mode = QSlider(Qt.Horizontal)
         self.split_mode.setRange(0, 3600)
         self.split_mode.setValue(600)
         self.split_mode.valueChanged.connect(lambda: self.split_value.setText(str(self.split_mode.value())))
-        self.tool_layout.addWidget(self.split_mode)
+        self.clip_layout.addWidget(self.split_mode)
 
         self.split_files_list = QTextEdit()
         self.split_files_list.setAcceptDrops(True)
         self.split_files_list.dropEvent = lambda e: self.split_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
         self.split_files_list.setPlaceholderText("拖拽文件到方框内，点击运行即可，每个文件生成一个文件夹，滑动条数字代表切割每段音频的长度（秒）。")
-        self.tool_layout.addWidget(self.split_files_list)
+        self.clip_layout.addWidget(self.split_files_list)
         self.run_split_button = QPushButton("🚀 分割")
         self.run_split_button.clicked.connect(self.run_split)
-        self.tool_layout.addWidget(self.run_split_button)
+        self.clip_layout.addWidget(self.run_split_button)
 
         self.merge_files_list = QTextEdit()
         self.merge_files_list.setAcceptDrops(True)
         self.merge_files_list.dropEvent = lambda e: self.merge_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
         self.merge_files_list.setPlaceholderText("拖拽多个字幕文件到方框内，点击运行即可，每次合并成一个文件。时间戳按照上面滑动条分割的时间累加。")
-        self.tool_layout.addWidget(self.merge_files_list)
+        self.clip_layout.addWidget(self.merge_files_list)
         self.run_merge_button = QPushButton("🚀 合并")
         self.run_merge_button.clicked.connect(self.run_merge)
-        self.tool_layout.addWidget(self.run_merge_button)
+        self.clip_layout.addWidget(self.run_merge_button)
 
-        # Merge Section
-        self.tool_layout.addWidget(BodyLabel("💾 字幕合成工具"))
+        # Clip Section
+        self.clip_layout.addWidget(BodyLabel("✂️ 切片工具"))
+        self.clip_files_list = QTextEdit()
+        self.clip_files_list.setAcceptDrops(True)
+        self.clip_files_list.dropEvent = lambda e: self.clip_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
+        self.clip_files_list.setPlaceholderText("拖拽视频文件到方框内，并填写开始和结束时间，点击运行即可。")
+        self.clip_layout.addWidget(self.clip_files_list)
+        self.clip_start_time = QLineEdit()
+        self.clip_start_time.setPlaceholderText("开始时间（HH:MM:SS.xxx）")
+        self.clip_layout.addWidget(self.clip_start_time)
+        self.clip_end_time = QLineEdit()
+        self.clip_end_time.setPlaceholderText("结束时间（HH:MM:SS.xxx）")
+        self.clip_layout.addWidget(self.clip_end_time)
+        self.run_clip_button = QPushButton("🚀 切片")
+        self.run_clip_button.clicked.connect(self.run_clip)
+        self.clip_layout.addWidget(self.run_clip_button)
+        
+        self.addSubInterface(self.clip_tab, FluentIcon.TILES, "分割工具", NavigationItemPosition.TOP)
+
+    def initSynthTab(self):
+        self.synth_tab = Widget("Synth", self)
+        self.synth_layout = self.synth_tab.vBoxLayout
+
+        # Video Synth
+        self.synth_layout.addWidget(BodyLabel("💾 字幕合成工具"))
         self.synth_files_list = QTextEdit()
         self.synth_files_list.setAcceptDrops(True)
         self.synth_files_list.dropEvent = lambda e: self.synth_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
         self.synth_files_list.setPlaceholderText("拖拽字幕文件和视频文件到下方框内，点击运行即可。字幕和视频文件需要一一对应，例如output.mp4和output.mp4.srt。")
-        self.tool_layout.addWidget(self.synth_files_list)
-        self.run_synth_button = QPushButton("🚀 合成")
+        self.synth_layout.addWidget(self.synth_files_list)
+        self.run_synth_button = QPushButton("🚀 字幕合成")
         self.run_synth_button.clicked.connect(self.run_synth)
-        self.tool_layout.addWidget(self.run_synth_button)
-        
-        self.addSubInterface(self.tool_tab, FluentIcon.BRUSH, "字幕工具", NavigationItemPosition.TOP)
+        self.synth_layout.addWidget(self.run_synth_button)
+
+        # Audio Synth
+        self.synth_layout.addWidget(BodyLabel("🎵 音频合成工具"))
+        self.synth_audio_files_list = QTextEdit()
+        self.synth_audio_files_list.setAcceptDrops(True)
+        self.synth_audio_files_list.dropEvent = lambda e: self.synth_audio_files_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
+        self.synth_audio_files_list.setPlaceholderText("拖拽音频文件（wav，mp3，flac）和图像（png,jpg,jpeg）到下方框内，点击运行即可。音频和图像文件需要一一对应。")
+        self.synth_layout.addWidget(self.synth_audio_files_list)
+        self.run_synth_audio_button = QPushButton("🚀 视频合成")
+        self.run_synth_audio_button.clicked.connect(self.run_synth_audio)
+        self.synth_layout.addWidget(self.run_synth_audio_button)
+
+        self.addSubInterface(self.synth_tab, FluentIcon.VIDEO, "合成工具", NavigationItemPosition.TOP)
 
     def initSummarizeTab(self):
         self.summarize_tab = Widget("Summarize", self)
@@ -537,11 +572,27 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
         self.worker.finished.connect(self.thread.quit)
         self.thread.start()
 
+    def run_clip(self):
+        self.thread = QThread()
+        self.worker = MainWorker(self)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.clip)
+        self.worker.finished.connect(self.thread.quit)
+        self.thread.start()
+
     def run_synth(self):
         self.thread = QThread()
         self.worker = MainWorker(self)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.synth)
+        self.worker.finished.connect(self.thread.quit)
+        self.thread.start()
+
+    def run_synth_audio(self):
+        self.thread = QThread()
+        self.worker = MainWorker(self)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.audiosynth)
         self.worker.finished.connect(self.thread.quit)
         self.thread.start()
 
@@ -719,7 +770,59 @@ class MainWorker(QObject):
                 input_srt = shutil.copy(input_srt, 'project/cache/')
 
                 self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(video_files)}个")
-                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file,  '-vf', f'subtitles={input_srt}', '-c:v', 'libx264', '-c:a', 'copy', input_file+'_synth.mp4'], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
+                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file,  '-vf', f'subtitles={input_srt}', '-vcodec', 'libx264', '-acodec', 'aac', input_file+'_synth.mp4'], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
+                self.pid.wait()
+                self.pid.kill()
+                self.pid.terminate()
+                self.status.emit("[INFO] 视频合成完成！")
+            
+        self.finished.emit()
+
+    @error_handler
+    def clip(self):
+        self.save_config()
+        input_files = self.master.clip_files_list.toPlainText()
+        clip_start = self.master.clip_start_time.text()
+        clip_end = self.master.clip_end_time.text()
+        if input_files:
+            input_files = input_files.strip().split('\n')
+            for idx, input_file in enumerate(input_files):
+                if not os.path.exists(input_file):
+                    self.status.emit(f"[ERROR] {input_file}文件不存在，请重新选择文件！")
+                    self.finished.emit()
+
+                self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(input_files)}个")
+                self.status.emit(f"[INFO] 正在进行切片...从{clip_start}到{clip_end}...")
+                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file, '-ss', clip_start, '-to', clip_end, '-vcodec', 'libx264', '-acodec', 'aac', os.path.join(*(input_file.split('.')[:-1]))+'_clip.'+input_file.split('.')[-1]], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
+                self.pid.wait()
+                self.pid.kill()
+                self.pid.terminate()
+                self.status.emit("[INFO] 视频切片完成！")
+        self.finished.emit()
+
+    @error_handler
+    def audiosynth(self):
+        self.save_config()
+        input_files = self.master.synth_audio_files_list.toPlainText()
+        if input_files:
+            input_files = input_files.strip().split('\n')
+            audio_files = sorted([i for i in input_files if i.endswith('.wav') or i.endswith('.mp3') or i.endswith('.flac')])
+            image_files = sorted([i for i in input_files if i.endswith('.png') or i.endswith('.jpg') or i.endswith('.jpeg')])
+            if len(audio_files) != len(image_files):
+                self.status.emit("[ERROR] 音频文件和图像文件数量不匹配，请重新选择文件！")
+                self.finished.emit()
+            
+            for idx, (audio_input, image_input) in enumerate(zip(audio_files, image_files)):
+                if not os.path.exists(audio_input):
+                    self.status.emit(f"[ERROR] {audio_input}文件不存在，请重新选择文件！")
+                    self.finished.emit()
+
+                if not os.path.exists(image_input):
+                    self.status.emit(f"[ERROR] {image_input}文件不存在，请重新选择文件！")
+                    self.finished.emit()
+
+                self.status.emit(f"[INFO] 当前处理文件：{audio_input} 第{idx+1}个，共{len(image_files)}个")
+                self.pid = subprocess.Popen(['ffmpeg', '-y', '-loop', '1', '-i', image_input, '-i', audio_input, '-shortest', '-vcodec', 'libx264', '-acodec', 'aac', audio_input+'_synth.mp4'], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
