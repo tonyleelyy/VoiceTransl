@@ -977,13 +977,17 @@ class MainWorker(QObject):
                     self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
                     continue
 
-                wav_file = '.'.join(input_file.split('.')[:-1]) + '.wav'
+                if input_file.endswith('wav'):
+                    self.status.emit("[INFO] 输入文件为wav格式，跳过音频提取步骤...")
+                    wav_file = input_file
 
-                self.status.emit("[INFO] 正在进行音频提取...")
-                self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', wav_file], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
-                self.pid.wait()
-                self.pid.kill()
-                self.pid.terminate()
+                else:
+                    wav_file = '.'.join(input_file.split('.')[:-1]) + '.wav'
+                    self.status.emit("[INFO] 正在进行音频提取...")
+                    self.pid = subprocess.Popen(['ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', wav_file], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
+                    self.pid.wait()
+                    self.pid.kill()
+                    self.pid.terminate()
 
                 if not os.path.exists(wav_file):
                     self.status.emit("[ERROR] 音频提取失败，请检查文件格式！")
@@ -1004,9 +1008,6 @@ class MainWorker(QObject):
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
-
-                if os.path.exists(wav_file):
-                    os.remove(wav_file)
 
                 output_file_path = os.path.join('project/gt_input', os.path.basename(input_file)+'.json')
                 make_prompt(input_file+'.srt', output_file_path)
