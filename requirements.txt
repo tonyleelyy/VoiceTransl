@@ -16,3 +16,8 @@ bilibili-dl
 PyQt-Fluent-Widgets
 pyinstaller
 openai
+torch
+librosa
+onnx
+soundfile
+onnxruntime-directml
