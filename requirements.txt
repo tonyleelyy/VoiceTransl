@@ -3,7 +3,6 @@ opencc
 packaging
 prompt_toolkit
 PyYAML
-re_edge_gpt
 Requests
 tenacity
 tiktoken

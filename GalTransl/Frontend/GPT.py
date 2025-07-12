@@ -13,7 +13,7 @@ from time import time
 from GalTransl import LOGGER
 from GalTransl.Backend.GPT3Translate import CGPT35Translate
 from GalTransl.Backend.GPT4Translate import CGPT4Translate
-from GalTransl.Backend.BingGPT4Translate import CBingGPT4Translate
+# from GalTransl.Backend.BingGPT4Translate import CBingGPT4Translate
 from GalTransl.Backend.SakuraTranslate import CSakuraTranslate
 from GalTransl.Backend.RebuildTranslate import CRebuildTranslate
 from GalTransl.ConfigHelper import initDictList
@@ -195,11 +195,11 @@ async def doLLMTranslate(
             gptapi = CGPT35Translate(projectConfig, eng_type, proxyPool, tokenPool)
         case "gpt4" | "gpt4-turbo":
             gptapi = CGPT4Translate(projectConfig, eng_type, proxyPool, tokenPool)
-        case "newbing":
-            cookiePool: list[str] = []
-            for i in projectConfig.getBackendConfigSection("bingGPT4")["cookiePath"]:
-                cookiePool.append(joinpath(projectConfig.getProjectDir(), i))
-            gptapi = CBingGPT4Translate(projectConfig, cookiePool, proxyPool)
+        # case "newbing":
+        #     cookiePool: list[str] = []
+        #     for i in projectConfig.getBackendConfigSection("bingGPT4")["cookiePath"]:
+        #         cookiePool.append(joinpath(projectConfig.getProjectDir(), i))
+        #     gptapi = CBingGPT4Translate(projectConfig, cookiePool, proxyPool)
         case "sakura-009" | "sakura-010" | "qwen-local":
             gptapi = CSakuraTranslate(projectConfig, eng_type, proxyPool)
             workersPerProject = 1
