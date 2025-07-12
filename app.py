@@ -1,6 +1,6 @@
 import sys, os
 
-# os.chdir(sys._MEIPASS)
+os.chdir(sys._MEIPASS)
 import shutil
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime, QSize
@@ -12,6 +12,7 @@ import re
 import json
 import requests
 import subprocess
+import soundfile as sf
 from time import sleep
 from yt_dlp import YoutubeDL
 from bilibili_dl.bilibili_dl.Video import Video
@@ -21,6 +22,7 @@ from bilibili_dl.bilibili_dl.constants import URL_VIDEO_INFO
 
 from prompt2srt import make_srt, make_lrc
 from srt2prompt import make_prompt, merge_srt_files
+from separate import Predictor
 from GalTransl.__main__ import worker
 
 ONLINE_TRANSLATOR_MAPPING = {
@@ -103,6 +105,7 @@ class MainWindow(QMainWindow):
                 summary_address = lines[9].strip()
                 summary_model = lines[10].strip()
                 summary_token = lines[11].strip()
+                uvr_file = lines[12].strip()
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
@@ -116,6 +119,7 @@ class MainWindow(QMainWindow):
                 self.summarize_address.setText(summary_address)
                 self.summarize_model.setText(summary_model)
                 self.summarize_token.setText(summary_token)
+                if self.uvr_file: self.uvr_file.setCurrentText(uvr_file)
 
         if os.path.exists('whisper/param.txt'):
             with open('whisper/param.txt', 'r', encoding='utf-8') as f:
@@ -360,70 +364,70 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
         self.settings_layout.addWidget(self.open_whisper_dir)
         self.settings_layout.addWidget(self.open_faster_dir)
 
-        # Translator Section
-        self.settings_layout.addWidget(BodyLabel("🚀 选择用于翻译的模型类别。"))
-        self.translator_group = QComboBox()
-        self.translator_group.addItems(TRANSLATOR_SUPPORTED)
-        self.settings_layout.addWidget(self.translator_group)
-        
-        self.settings_layout.addWidget(BodyLabel("🚀 在线模型令牌"))
-        self.gpt_token = QLineEdit()
-        self.gpt_token.setPlaceholderText("留空为使用上次配置的Token。")
-        self.settings_layout.addWidget(self.gpt_token)
+        self.settings_layout.addWidget(BodyLabel("🔧 输入Whisper命令行参数。"))
+        self.param_whisper = QTextEdit()
+        self.param_whisper.setPlaceholderText("每个参数空格隔开，请参考Whisper.cpp，不清楚请保持默认。")
+        self.settings_layout.addWidget(self.param_whisper)
 
-        self.settings_layout.addWidget(BodyLabel("🚀 在线模型名称"))
-        self.gpt_model = QLineEdit()
-        self.gpt_model.setPlaceholderText("例如：deepseek-chat")
-        self.settings_layout.addWidget(self.gpt_model)
+        self.settings_layout.addWidget(BodyLabel("🔧 输入Whisper-Faster命令行参数。"))
+        self.param_whisper_faster = QTextEdit()
+        self.param_whisper_faster.setPlaceholderText("每个参数空格隔开，请参考Faster Whisper文档，不清楚请保持默认。")
+        self.settings_layout.addWidget(self.param_whisper_faster)
 
-        self.settings_layout.addWidget(BodyLabel("🚀 自定义API地址（gpt-custom）"))
-        self.gpt_address = QLineEdit()
-        self.gpt_address.setPlaceholderText("例如：http://127.0.0.1:11434")
-        self.settings_layout.addWidget(self.gpt_address)
-        
-        self.settings_layout.addWidget(BodyLabel("💻 离线模型文件（galtransl， sakura，llamacpp）"))
-        self.sakura_file = QComboBox()
-        sakura_lst = [i for i in os.listdir('llama') if i.endswith('gguf')]
-        self.sakura_file.addItems(sakura_lst)
-        self.settings_layout.addWidget(self.sakura_file)
-        
-        self.settings_layout.addWidget(BodyLabel("💻 离线模型参数（galtransl， sakura，llamacpp）"))
-        self.sakura_value = QLineEdit()
-        self.sakura_value.setPlaceholderText("100")
-        self.sakura_value.setReadOnly(True)
-        self.settings_layout.addWidget(self.sakura_value)
-        self.sakura_mode = QSlider(Qt.Horizontal)
-        self.sakura_mode.setRange(0, 100)
-        self.sakura_mode.setValue(100)
-        self.sakura_mode.valueChanged.connect(lambda: self.sakura_value.setText(str(self.sakura_mode.value())))
-        self.settings_layout.addWidget(self.sakura_mode)
-
-        self.open_model_dir = QPushButton("📁 打开离线模型目录")
-        self.open_model_dir.clicked.connect(lambda: os.startfile(os.path.join(os.getcwd(),'llama')))
-        self.settings_layout.addWidget(self.open_model_dir)
-
-        self.addSubInterface(self.settings_tab, FluentIcon.SETTING, "基础设置", NavigationItemPosition.TOP)
+        self.addSubInterface(self.settings_tab, FluentIcon.MUSIC, "听写设置", NavigationItemPosition.TOP)
 
     def initAdvancedSettingTab(self):
         self.advanced_settings_tab = Widget("AdvancedSettings", self)
         self.advanced_settings_layout = self.advanced_settings_tab.vBoxLayout
-        
-        self.advanced_settings_layout.addWidget(BodyLabel("🔧 输入Whisper命令行参数。"))
-        self.param_whisper = QTextEdit()
-        self.param_whisper.setPlaceholderText("每个参数空格隔开，请参考Whisper.cpp，不清楚请保持默认。")
-        self.advanced_settings_layout.addWidget(self.param_whisper)
 
-        self.advanced_settings_layout.addWidget(BodyLabel("🔧 输入Whisper-Faster命令行参数。"))
-        self.param_whisper_faster = QTextEdit()
-        self.param_whisper_faster.setPlaceholderText("每个参数空格隔开，请参考Faster Whisper文档，不清楚请保持默认。")
-        self.advanced_settings_layout.addWidget(self.param_whisper_faster)
+        # Translator Section
+        self.advanced_settings_layout.addWidget(BodyLabel("🚀 选择用于翻译的模型类别。"))
+        self.translator_group = QComboBox()
+        self.translator_group.addItems(TRANSLATOR_SUPPORTED)
+        self.advanced_settings_layout.addWidget(self.translator_group)
+        
+        self.advanced_settings_layout.addWidget(BodyLabel("🚀 在线模型令牌"))
+        self.gpt_token = QLineEdit()
+        self.gpt_token.setPlaceholderText("留空为使用上次配置的Token。")
+        self.advanced_settings_layout.addWidget(self.gpt_token)
+
+        self.advanced_settings_layout.addWidget(BodyLabel("🚀 在线模型名称"))
+        self.gpt_model = QLineEdit()
+        self.gpt_model.setPlaceholderText("例如：deepseek-chat")
+        self.advanced_settings_layout.addWidget(self.gpt_model)
+
+        self.advanced_settings_layout.addWidget(BodyLabel("🚀 自定义API地址（gpt-custom）"))
+        self.gpt_address = QLineEdit()
+        self.gpt_address.setPlaceholderText("例如：http://127.0.0.1:11434")
+        self.advanced_settings_layout.addWidget(self.gpt_address)
+        
+        self.advanced_settings_layout.addWidget(BodyLabel("💻 离线模型文件（galtransl， sakura，llamacpp）"))
+        self.sakura_file = QComboBox()
+        sakura_lst = [i for i in os.listdir('llama') if i.endswith('gguf')]
+        self.sakura_file.addItems(sakura_lst)
+        self.advanced_settings_layout.addWidget(self.sakura_file)
+        
+        self.advanced_settings_layout.addWidget(BodyLabel("💻 离线模型参数（galtransl， sakura，llamacpp）"))
+        self.sakura_value = QLineEdit()
+        self.sakura_value.setPlaceholderText("100")
+        self.sakura_value.setReadOnly(True)
+        self.advanced_settings_layout.addWidget(self.sakura_value)
+        self.sakura_mode = QSlider(Qt.Horizontal)
+        self.sakura_mode.setRange(0, 100)
+        self.sakura_mode.setValue(100)
+        self.sakura_mode.valueChanged.connect(lambda: self.sakura_value.setText(str(self.sakura_mode.value())))
+        self.advanced_settings_layout.addWidget(self.sakura_mode)
+
+        self.open_model_dir = QPushButton("📁 打开离线模型目录")
+        self.open_model_dir.clicked.connect(lambda: os.startfile(os.path.join(os.getcwd(),'llama')))
+        self.advanced_settings_layout.addWidget(self.open_model_dir)
 
         self.advanced_settings_layout.addWidget(BodyLabel("🔧 输入Llama.cpp命令行参数。"))
         self.param_llama = QTextEdit()
         self.param_llama.setPlaceholderText("每个参数空格隔开，请参考Llama.cpp文档，不清楚请保持默认。")
         self.advanced_settings_layout.addWidget(self.param_llama)
 
-        self.addSubInterface(self.advanced_settings_tab, FluentIcon.COMMAND_PROMPT, "命令参数", NavigationItemPosition.TOP)
+        self.addSubInterface(self.advanced_settings_tab, FluentIcon.BOOK_SHELF, "翻译设置", NavigationItemPosition.TOP)
 
     def initClipTab(self):
         self.clip_tab = Widget("Clip", self)
@@ -482,6 +486,28 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
         self.synth_tab = Widget("Synth", self)
         self.synth_layout = self.synth_tab.vBoxLayout
 
+        # Vocal Split
+        self.synth_layout.addWidget(BodyLabel("🎤 人声分离工具"))
+        self.synth_layout.addWidget(BodyLabel("选择用于伴奏分离的模型文件。"))
+        self.uvr_file = QComboBox()
+        uvr_lst = [i for i in os.listdir('uvr') if i.endswith('onnx')]
+        self.uvr_file.addItems(uvr_lst)
+        self.synth_layout.addWidget(self.uvr_file)
+        self.open_uvr_dir = QPushButton("📁 打开UVR模型目录")
+        self.open_uvr_dir.clicked.connect(lambda: os.startfile(os.path.join(os.getcwd(),'uvr')))
+        self.synth_layout.addWidget(self.open_uvr_dir)
+
+
+        self.uvr_file_list = QTextEdit()
+        self.uvr_file_list.setAcceptDrops(True)
+        self.uvr_file_list.dropEvent = lambda e: self.uvr_file_list.setPlainText('\n'.join([i[8:] for i in e.mimeData().text().split('\n')]))
+        self.uvr_file_list.setPlaceholderText("拖拽音频文件到方框内，点击运行即可。输出文件为原文件名_vocal.wav和_no_vocal.wav。")
+        self.synth_layout.addWidget(self.uvr_file_list)
+
+        self.run_uvr_button = QPushButton("🚀 人声分离")
+        self.run_uvr_button.clicked.connect(self.run_vocal_split)
+        self.synth_layout.addWidget(self.run_uvr_button)
+
         # Video Synth
         self.synth_layout.addWidget(BodyLabel("💾 字幕合成工具"))
         self.synth_files_list = QTextEdit()
@@ -504,7 +530,7 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
         self.run_synth_audio_button.clicked.connect(self.run_synth_audio)
         self.synth_layout.addWidget(self.run_synth_audio_button)
 
-        self.addSubInterface(self.synth_tab, FluentIcon.VIDEO, "合成工具", NavigationItemPosition.TOP)
+        self.addSubInterface(self.synth_tab, FluentIcon.DEVELOPER_TOOLS, "合成工具", NavigationItemPosition.TOP)
 
     def initSummarizeTab(self):
         self.summarize_tab = Widget("Summarize", self)
@@ -540,7 +566,7 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
         self.run_summarize_button.clicked.connect(self.run_summarize)
         self.summarize_layout.addWidget(self.run_summarize_button)
 
-        self.addSubInterface(self.summarize_tab, FluentIcon.BOOK_SHELF, "字幕总结", NavigationItemPosition.TOP)
+        self.addSubInterface(self.summarize_tab, FluentIcon.EDUCATION, "字幕总结", NavigationItemPosition.TOP)
         
     def select_input(self):
         options = QFileDialog.Options()
@@ -596,6 +622,14 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
         self.worker.finished.connect(self.thread.quit)
         self.thread.start()
 
+    def run_vocal_split(self):
+        self.thread = QThread()
+        self.worker = MainWorker(self)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.vocal_split)
+        self.worker.finished.connect(self.thread.quit)
+        self.thread.start()
+
     def run_summarize(self):
         self.thread = QThread()
         self.worker = MainWorker(self)
@@ -648,10 +682,11 @@ class MainWorker(QObject):
         summary_address = self.master.summarize_address.text()
         summary_model = self.master.summarize_model.text()
         summary_token = self.master.summarize_token.text()
+        uvr_file = self.master.uvr_file.currentText()
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{summary_address}\n{summary_model}\n{summary_token}\n")
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{summary_address}\n{summary_model}\n{summary_token}\n{uvr_file}\n")
 
         # save whisper param
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
@@ -674,6 +709,33 @@ class MainWorker(QObject):
             f.write(self.master.after_dict.toPlainText())
 
         self.status.emit("[INFO] 配置保存完成！")
+
+    @error_handler
+    def vocal_split(self):
+        self.save_config()
+        uvr_file = self.master.uvr_file.currentText()
+        if not uvr_file.endswith('.onnx'):
+            self.status.emit("[ERROR] 请选择正确的UVR模型文件！")
+            self.finished.emit()
+            return
+
+        input_files = self.master.uvr_file_list.toPlainText()
+        if input_files:
+            input_files = input_files.strip().split('\n')
+            for idx, input_file in enumerate(input_files):
+                if not os.path.exists(input_file):
+                    self.status.emit(f"[ERROR] {input_file}文件不存在，请重新选择文件！")
+                    self.finished.emit()
+
+                self.status.emit(f"[INFO] 正在进行伴奏分离...第{idx+1}个，共{len(input_files)}个")
+
+                predictor = Predictor(args={'model_path': os.path.join('uvr',uvr_file), 'denoise': True, 'margin': 44100, 'chunks': 15, 'n_fft': 6144, 'dim_t': 8, 'dim_f': 2048})
+                vocals, no_vocals, sampling_rate = predictor.predict(input_file)
+                sf.write(input_file+"_vocals.wav", vocals, sampling_rate)
+                sf.write(input_file+"_no_vocals.wav", no_vocals, sampling_rate)
+
+            self.status.emit("[INFO] 文件处理完成！")
+        self.finished.emit()
 
     @error_handler
     def summarize(self):
