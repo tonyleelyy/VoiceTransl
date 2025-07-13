@@ -884,7 +884,7 @@ class MainWorker(QObject):
                     self.finished.emit()
 
                 self.status.emit(f"[INFO] 当前处理文件：{audio_input} 第{idx+1}个，共{len(image_files)}个")
-                self.pid = subprocess.Popen(['ffmpeg', '-y', '-loop', '1', '-i', image_input, '-i', audio_input, '-shortest', '-vcodec', 'libx264', '-acodec', 'aac', audio_input+'_synth.mp4'], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
+                self.pid = subprocess.Popen(['ffmpeg', '-y', '-loop', '1', '-r', '1', '-f', 'image2', '-i', image_input, '-i', audio_input, '-shortest', '-vcodec', 'libx264', '-acodec', 'aac', audio_input+'_synth.mp4'], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
                 self.pid.wait()
                 self.pid.kill()
                 self.pid.terminate()
