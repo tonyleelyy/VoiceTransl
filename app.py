@@ -12,7 +12,6 @@ import re
 import json
 import requests
 import subprocess
-import soundfile as sf
 from time import sleep
 from yt_dlp import YoutubeDL
 from bilibili_dl.bilibili_dl.Video import Video
@@ -22,7 +21,6 @@ from bilibili_dl.bilibili_dl.constants import URL_VIDEO_INFO
 
 from prompt2srt import make_srt, make_lrc
 from srt2prompt import make_prompt, merge_srt_files
-from separate import Predictor
 from GalTransl.__main__ import worker
 
 ONLINE_TRANSLATOR_MAPPING = {
@@ -728,11 +726,10 @@ class MainWorker(QObject):
                     self.finished.emit()
 
                 self.status.emit(f"[INFO] 正在进行伴奏分离...第{idx+1}个，共{len(input_files)}个")
-
-                predictor = Predictor(args={'model_path': os.path.join('uvr',uvr_file), 'denoise': True, 'margin': 44100, 'chunks': 15, 'n_fft': 6144, 'dim_t': 8, 'dim_f': 2048})
-                vocals, no_vocals, sampling_rate = predictor.predict(input_file)
-                sf.write(input_file+"_vocals.wav", vocals, sampling_rate)
-                sf.write(input_file+"_no_vocals.wav", no_vocals, sampling_rate)
+                self.pid = subprocess.Popen(['uvr/separate.exe', '-m', os.path.join('uvr',uvr_file), input_file], stdout=sys.stdout, stderr=sys.stdout, creationflags=0x08000000)
+                self.pid.wait()
+                self.pid.kill()
+                self.pid.terminate()
 
             self.status.emit("[INFO] 文件处理完成！")
         self.finished.emit()
