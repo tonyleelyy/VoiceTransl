@@ -1,6 +1,6 @@
 import sys, os
 
-os.chdir(sys._MEIPASS)
+# os.chdir(sys._MEIPASS)
 import shutil
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime, QSize
@@ -131,17 +131,21 @@ class MainWindow(QMainWindow):
             with open('llama/param.txt', 'r', encoding='utf-8') as f:
                 self.param_llama.setPlainText(f.read())
 
-        if os.path.exists('project/项目字典_译前.txt'):
-            with open('project/项目字典_译前.txt', 'r', encoding='utf-8') as f:
+        if os.path.exists('project/dict_pre.txt'):
+            with open('project/dict_pre.txt', 'r', encoding='utf-8') as f:
                 self.before_dict.setPlainText(f.read())
 
-        if os.path.exists('project/项目GPT字典.txt'):
-            with open('project/项目GPT字典.txt', 'r', encoding='utf-8') as f:
+        if os.path.exists('project/dict_gpt.txt'):
+            with open('project/dict_gpt.txt', 'r', encoding='utf-8') as f:
                 self.gpt_dict.setPlainText(f.read())
 
-        if os.path.exists('project/项目字典_译后.txt'):
-            with open('project/项目字典_译后.txt', 'r', encoding='utf-8') as f:
+        if os.path.exists('project/dict_after.txt'):
+            with open('project/dict_after.txt', 'r', encoding='utf-8') as f:
                 self.after_dict.setPlainText(f.read())
+
+        if os.path.exists('project/extra_prompt.txt'):
+            with open('project/extra_prompt.txt', 'r', encoding='utf-8') as f:
+                self.extra_prompt.setPlainText(f.read())
 
     def setup_timer(self):
         self.timer = QTimer(self)
@@ -336,6 +340,11 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
         self.after_dict = QTextEdit()
         self.after_dict.setPlaceholderText("中文原文(Tab键)中文替换词\n中文原文(Tab键)中文替换词")
         self.dict_layout.addWidget(self.after_dict)
+
+        self.dict_layout.addWidget(BodyLabel("📕 配置额外提示。"))
+        self.extra_prompt = QTextEdit()
+        self.extra_prompt.setPlaceholderText("请在这里输入额外的提示信息，例如世界书或台本内容。")
+        self.dict_layout.addWidget(self.extra_prompt)
 
         self.addSubInterface(self.dict_tab, FluentIcon.DICTIONARY, "字典设置", NavigationItemPosition.TOP)
         
@@ -906,6 +915,7 @@ class MainWorker(QObject):
         before_dict = self.master.before_dict.toPlainText()
         gpt_dict = self.master.gpt_dict.toPlainText()
         after_dict = self.master.after_dict.toPlainText()
+        extra_prompt = self.master.extra_prompt.toPlainText()
         param_whisper = self.master.param_whisper.toPlainText()
         param_whisper_faster = self.master.param_whisper_faster.toPlainText()
         param_llama = self.master.param_llama.toPlainText()
@@ -926,23 +936,29 @@ class MainWorker(QObject):
 
         os.makedirs('project/cache', exist_ok=True)
         if before_dict:
-            with open('project/项目字典_译前.txt', 'w', encoding='utf-8') as f:
+            with open('project/dict_pre.txt', 'w', encoding='utf-8') as f:
                 f.write(before_dict.replace(' ','\t'))
         else:
-            if os.path.exists('project/项目字典_译前.txt'):
-                os.remove('project/项目字典_译前.txt')
+            if os.path.exists('project/dict_pre.txt'):
+                os.remove('project/dict_pre.txt')
         if gpt_dict:
-            with open('project/项目GPT字典.txt', 'w', encoding='utf-8') as f:
+            with open('project/dict_gpt.txt', 'w', encoding='utf-8') as f:
                 f.write(gpt_dict.replace(' ','\t'))
         else:
-            if os.path.exists('project/项目GPT字典.txt'):
-                os.remove('project/项目GPT字典.txt')
+            if os.path.exists('project/dict_gpt.txt'):
+                os.remove('project/dict_gpt.txt')
         if after_dict:
-            with open('project/项目字典_译后.txt', 'w', encoding='utf-8') as f:
+            with open('project/dict_after.txt', 'w', encoding='utf-8') as f:
                 f.write(after_dict.replace(' ','\t'))
         else:
-            if os.path.exists('project/项目字典_译后.txt'):
-                os.remove('project/项目字典_译后.txt')
+            if os.path.exists('project/dict_after.txt'):
+                os.remove('project/dict_after.txt')
+        if extra_prompt:
+            with open('project/extra_prompt.txt', 'w', encoding='utf-8') as f:
+                f.write(extra_prompt)
+        else:
+            if os.path.exists('project/extra_prompt.txt'):
+                os.remove('project/extra_prompt.txt')
 
         self.status.emit(f"[INFO] 当前输入文件：{input_files}, 当前视频链接：{yt_url}")
 

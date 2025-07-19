@@ -198,6 +198,12 @@ class CGPT35Translate:
         prompt_req = prompt_req.replace("[Glossary]", gptdict)
         prompt_req = prompt_req.replace("[SourceLang]", self.source_lang)
         prompt_req = prompt_req.replace("[TargetLang]", self.target_lang)
+
+        if os.path.exists('project/extra_prompt.txt'):
+            with open('project/extra_prompt.txt', 'r', encoding='utf-8') as f:
+                extra_prompt = f.read()
+            prompt_req = extra_prompt + "\n" + prompt_req
+
         if '"name"' in input_json:
             prompt_req = prompt_req.replace("[NamePrompt3]", self.name_prompt)
         else:
@@ -211,7 +217,7 @@ class CGPT35Translate:
                     self.chatbot.set_api_addr(
                         f"{self.token.domain}/v1/chat/completions"
                     )
-                LOGGER.info(f"-> 翻译输入：\n{gptdict}\n{input_json}\n")
+                LOGGER.info(f"-> 翻译输入：\n{prompt_req}\n")
                 if self.streamOutputMode:
                     LOGGER.info("-> 输出：\n")
                 resp = ""
