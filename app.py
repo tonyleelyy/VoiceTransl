@@ -1,6 +1,6 @@
 import sys, os
 
-os.chdir(sys._MEIPASS)
+# os.chdir(sys._MEIPASS)
 import shutil
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime, QSize
@@ -104,6 +104,7 @@ class MainWindow(QMainWindow):
                 summary_model = lines[10].strip()
                 summary_token = lines[11].strip()
                 uvr_file = lines[12].strip()
+                output_format = lines[13].strip()
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
@@ -118,6 +119,7 @@ class MainWindow(QMainWindow):
                 self.summarize_model.setText(summary_model)
                 self.summarize_token.setText(summary_token)
                 if self.uvr_file: self.uvr_file.setCurrentText(uvr_file)
+                self.output_format.setCurrentText(output_format)
 
         if os.path.exists('whisper/param.txt'):
             with open('whisper/param.txt', 'r', encoding='utf-8') as f:
@@ -301,6 +303,13 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
         self.proxy_address = QLineEdit()
         self.proxy_address.setPlaceholderText("例如：http://127.0.0.1:7890，留空为不使用")
         self.input_output_layout.addWidget(self.proxy_address)
+
+        # Format Section
+        self.input_output_layout.addWidget(BodyLabel("🎥 选择输出的字幕格式。"))
+        self.output_format = QComboBox()
+        self.output_format.addItems(['原文SRT', '中文LRC', '中文SRT', '双语SRT'])
+        self.output_format.setCurrentText('中文SRT')
+        self.input_output_layout.addWidget(self.output_format)
 
         self.run_button = QPushButton("🚀 运行")
         self.run_button.clicked.connect(self.run_worker)
@@ -690,10 +699,11 @@ class MainWorker(QObject):
         summary_model = self.master.summarize_model.text()
         summary_token = self.master.summarize_token.text()
         uvr_file = self.master.uvr_file.currentText()
+        output_format = self.master.output_format.currentText()
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{summary_address}\n{summary_model}\n{summary_token}\n{uvr_file}\n")
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{summary_address}\n{summary_model}\n{summary_token}\n{uvr_file}\n{output_format}\n")
 
         # save whisper param
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
@@ -919,6 +929,7 @@ class MainWorker(QObject):
         param_whisper = self.master.param_whisper.toPlainText()
         param_whisper_faster = self.master.param_whisper_faster.toPlainText()
         param_llama = self.master.param_llama.toPlainText()
+        output_format = self.master.output_format.currentText()
 
         if not gpt_token:
             gpt_token = 'sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
@@ -1081,7 +1092,15 @@ class MainWorker(QObject):
                 input_file = wav_file[:-8]
                 output_file_path = os.path.join('project/gt_input', os.path.basename(input_file)+'.json')
                 make_prompt(wav_file[:-4]+'.srt', output_file_path)
-                make_srt(output_file_path, input_file+'.srt')
+
+                if output_format == '原文SRT' or output_format == '双语SRT':
+                    make_srt(output_file_path, input_file+'.srt')
+
+                if os.path.exists(wav_file):
+                    os.remove(wav_file)
+
+                if os.path.exists(wav_file[:-4]+'.srt'):
+                    os.remove(wav_file[:-4]+'.srt')
                 self.status.emit("[INFO] 语音识别完成！")
 
             if translator == '不进行翻译':
@@ -1122,9 +1141,15 @@ class MainWorker(QObject):
             worker('project', 'config.yaml', worker_trans, show_banner=False)
 
             self.status.emit("[INFO] 正在生成字幕文件...")
-            make_srt(output_file_path.replace('gt_input','gt_output'), input_file+'.zh.srt')
-            make_lrc(output_file_path.replace('gt_input','gt_output'), input_file+'.lrc')
-            merge_srt_files([input_file+'.srt',input_file+'.zh.srt'], input_file+'.combine.srt')
+            if output_format == '中文SRT' or output_format == '双语SRT':
+                make_srt(output_file_path.replace('gt_input','gt_output'), input_file+'.zh.srt')
+
+            if output_format == '中文LRC':
+                make_lrc(output_file_path.replace('gt_input','gt_output'), input_file+'.lrc')
+
+            if output_format == '双语SRT':
+                merge_srt_files([input_file+'.srt',input_file+'.zh.srt'], input_file+'.combine.srt')
+
             self.status.emit("[INFO] 字幕文件生成完成！")
 
             if 'sakura' in translator or 'llamacpp' in translator or 'galtransl' in translator:
