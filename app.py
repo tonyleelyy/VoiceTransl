@@ -1,6 +1,6 @@
 import sys, os
 
-# os.chdir(sys._MEIPASS)
+os.chdir(sys._MEIPASS)
 import shutil
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime, QSize
@@ -364,7 +364,7 @@ B站教程：https://space.bilibili.com/36464441/lists/3239068。
         # Whisper Section
         self.settings_layout.addWidget(BodyLabel("🗣️ 选择用于语音识别的模型文件。"))
         self.whisper_file = QComboBox()
-        whisper_lst = [i for i in os.listdir('whisper') if i.startswith('ggml') and i.endswith('bin')] + [i for i in os.listdir('whisper-faster') if i.startswith('faster-whisper')] + ['不进行听写']
+        whisper_lst = [i for i in os.listdir('whisper') if i.startswith('ggml') and i.endswith('bin') and not 'silero' in i] + [i for i in os.listdir('whisper-faster') if i.startswith('faster-whisper')] + ['不进行听写']
         self.whisper_file.addItems(whisper_lst)
         self.settings_layout.addWidget(self.whisper_file)
 
