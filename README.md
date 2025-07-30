@@ -13,22 +13,35 @@ VoiceTransl是一站式离线AI视频字幕生成和翻译软件，从视频下�
 * 支持多种输入格式，包括音频、视频、SRT字幕。
 * 支持多种输出格式，包括SRT字幕、LRC字幕。
 * 支持多种语言，包括日语，英语，韩语，俄语，法语。
+* 支持VAD（语音活动检测），自动识别音频中的语音段落。
 * 支持字典功能，可以自定义翻译字典，替换输入输出。
+* 支持世界书/台本输入，可以自定义翻译参考资料。
 * 支持从YouTube/Bilibili及媒体链接直接下载视频。
 * 支持文件和链接批量处理，自动识别文件类型。
 * 支持音频切分，字幕合并和视频合成。
-* 支持字幕总结，可以自定义Prompt。
+* 支持视频总结，将视频内容总结为带时间轴简短的文本。
+* 支持人声分离，将人声和伴奏分离，支持多种模型。
+
+## 模式
+
+本软件支持四种模式，分别是下载模式，翻译模式，听写模式和完整模式。
+
+1. 下载模式：支持从YouTube/Bilibili直接下载视频。请填写视频链接，语音识别选择不进行听写，字幕翻译选择不进行翻译，然后点击运行按钮。
+2. 翻译模式：支持字幕翻译，支持多种翻译模型。请填写字幕文件，语音识别选择不进行听写，字幕翻译选择模型，然后点击运行按钮。
+3. 听写模式：支持音频听写，支持多种听写模型。请填写音视频文件或视频链接，语音识别选择模型，字幕翻译选择不进行翻译，然后点击运行按钮。
+4. 完整模式：支持从下载到翻译的完整流程。请填写音视频文件或视频链接，语音识别选择模型，字幕翻译选择模型，然后点击运行按钮。
+5. 工具模式：支持音频分离，音频切分，字幕合并，视频合成和视频总结。请填写相应输入，选择工具，然后点击运行按钮。
 
 ## 在线镜像
 
 打开即用的AI翻译，与配置环境说拜拜，推荐大家使用优云智算算力租赁平台。万卡4090 超多好玩免费的镜像给大家免费体验,高性价比算力租赁平台,上市公司ucloud旗下，专业有保障。点击链接直达[镜像地址](https://www.compshare.cn/images/compshareImage-16qc028dgfoh?referral_code=1RFfR2FQ2FyEVRJMyrOn5d&ytag=GPU_YY-GH_simple)，使用说明请看
 [视频教程](https://b23.tv/qN9bDHi)。使用昕蒲邀请链接注册可得实名20增金+链接注册20+高校企业认证再得10，还可享95折，4090一小时只要1.98 ：[邀请链接](https://passport.compshare.cn/register?referral_code=1RFfR2FQ2FyEVRJMyrOn5d&ytag=simple_bilibili)
 
-## 下载
+## 下载地址
 
 下载最新版本的[VoiceTransl](https://github.com/shinnpuru/VoiceTransl/releases/)，解压后运行`VoiceTransl.exe`。
 
-## 听写
+## 听写模型配置
 
 * 本项目使用[whisper.cpp](https://github.com/ggerganov/whisper.cpp)模型，引擎已经为Vulkan编译配置好，兼容N卡/A卡/I卡。模型需要自行下载，请选择合适的whisper.cpp模型下载然后放到`whisper`文件夹。
 
@@ -58,7 +71,7 @@ faster-whisper-xxx/
 ```
 
 
-## 在线翻译
+## 在线翻译配置
 
 本项目支持以下在线模型API接口，需要填写模型名称和Token。
 
@@ -73,7 +86,7 @@ faster-whisper-xxx/
 
 其他模型请使用`gpt-custom`兼容接口并配置自定义OpenAI地址（例如`https://api.openai.com`，默认会自动添加`/v1/chat/completions`）。
 
-## 离线翻译
+## 离线翻译配置
 
 * 本地翻译模型基于[llama.cpp](https://github.com/ggerganov/llama.cpp)引擎，已经为Vulkan编译配置好，兼容N卡/A卡/I卡。
 
@@ -95,7 +108,7 @@ llama-bxxxx-bin-win-cuda-cu12.4-x64.zip
 | [Gemma3-12B-Q4](https://ai.google.dev/gemma/docs/core) | 多语种 | llamacpp |  ~7 GiB | ~14 GB | [下载](https://huggingface.co/ggml-org/gemma-3-12b-it-GGUF) |
 
 
-## 人声分离
+## 人声分离配置
 
 人声分离基于[MDX-Net](https://github.com/kuielab/mdx-net)模型，模型请在[链接](https://github.com/TRvlvr/model_repo/releases/tag/all_public_uvr_models)处下载，并放到`uvr`文件夹下。推荐使用以下模型：
 
@@ -103,14 +116,6 @@ llama-bxxxx-bin-win-cuda-cu12.4-x64.zip
 - `UVR-MDX-NET-Inst_HQ_3.onnx`
 - `UVR_MDXNET_KARA_2.onnx`
 
-## 模式
-
-本软件支持四种模式，分别是下载模式，翻译模式，听写模式和完整模式。
-
-1. 下载模式：支持从YouTube/Bilibili直接下载视频。请填写视频链接，语音识别选择不进行听写，字幕翻译选择不进行翻译，然后点击运行按钮。
-2. 翻译模式：支持字幕翻译，支持多种翻译模型。请填写字幕文件，语音识别选择不进行听写，字幕翻译选择模型，然后点击运行按钮。
-3. 听写模式：支持音频听写，支持多种听写模型。请填写音视频文件或视频链接，语音识别选择模型，字幕翻译选择不进行翻译，然后点击运行按钮。
-4. 完整模式：支持从下载到翻译的完整流程。请填写音视频文件或视频链接，语音识别选择模型，字幕翻译选择模型，然后点击运行按钮。
 
 ## 常见问题
 
@@ -119,15 +124,19 @@ llama-bxxxx-bin-win-cuda-cu12.4-x64.zip
 * 在线模型请检查网络连接是否正常，或者尝试更换代理。
 * 离线模型出现连接错误，先检查是否超显存，把离线参数从0开始逐步增加10；然后确认关闭所有的代理软件，在系统设置-网络和Internet-代理里面应该是空的。
 
-2. 多次使用之后闪退
+2. 更新包覆盖之后闪退
+
+请尝试删除`config.txt`再启动，或重新解压程序到一个新的目录再把相应的模型迁移。
+
+3. 多次使用之后闪退
 
 缓存文件中可能存在问题，可以尝试清理下载缓存，或者重新解压程序到一个新的目录。
 
-3. 命令行输出乱码
+4. 命令行输出乱码
 
 请检查系统编码是否为UTF-8，Windows控制面板-区域-更改日期、时间或数字格式-管理-更改系统区域设置-使用UTF-8提供全球语言支持。
 
-4. 不是Windows系统可以用吗
+5. 不是Windows系统可以用吗
 
 Linux可以使用服务器部署进行运行，详细请参考[server分支](https://github.com/shinnpuru/GalTransl-for-ASMR/tree/server)。MacOS暂时不支持。
 
