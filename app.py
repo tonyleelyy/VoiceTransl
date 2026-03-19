@@ -1299,7 +1299,26 @@ class MainWorker(QObject):
                 'galtransl' in translator or 'sakura' in translator or 'llamacpp' in translator
             ) else 'gpt35-1106'
 
-        proc = None
+        running_procs = {}
+
+        def start_named_proc(proc_name, args):
+            existing = running_procs.get(proc_name)
+            if existing and existing.poll() is None:
+                self.status.emit(f"[WARN] 检测到进程 {proc_name} 已在运行，跳过重复启动。")
+                return existing, True
+            if existing:
+                self._cleanup_process(existing)
+                running_procs.pop(proc_name, None)
+
+            new_proc = self._start_process(args)
+            running_procs[proc_name] = new_proc
+            return new_proc, False
+
+        def stop_named_proc(proc_name):
+            target = running_procs.pop(proc_name, None)
+            if target:
+                self._cleanup_process(target)
+
         for idx, input_file in enumerate(input_files):
             if self._stop_requested:
                 break
@@ -1386,9 +1405,12 @@ class MainWorker(QObject):
 
                 wav_file = '.'.join(input_file.split('.')[:-1]) + '.16k.wav'
                 self.status.emit("[INFO] 正在进行音频提取...")
-                proc = self._start_process(['ffmpeg/ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', wav_file])
-                proc.wait()
-                self._cleanup_process(proc)
+                ffmpeg_proc, _ = start_named_proc(
+                    'ffmpeg_extract',
+                    ['ffmpeg/ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', wav_file]
+                )
+                ffmpeg_proc.wait()
+                stop_named_proc('ffmpeg_extract')
 
                 if not os.path.exists(wav_file):
                     self.status.emit("[ERROR] 音频提取失败，请检查文件格式！")
@@ -1398,15 +1420,24 @@ class MainWorker(QObject):
 
                 if whisper_file.startswith('ggml'):
                     print(param_whisper)
-                    proc = self._start_process([param.replace('$whisper_file',whisper_file).replace('$input_file',wav_file[:-4]).replace('$language',language) for param in param_whisper.split()])
+                    whisper_proc, _ = start_named_proc(
+                        'whisper',
+                        [param.replace('$whisper_file',whisper_file).replace('$input_file',wav_file[:-4]).replace('$language',language) for param in param_whisper.split()]
+                    )
                 elif whisper_file.startswith('faster-whisper'):
                     print(param_whisper_faster)
-                    proc = self._start_process([param.replace('$whisper_file',whisper_file[15:]).replace('$input_file',wav_file[:-4]).replace('$language',language).replace('$output_dir',os.path.dirname(input_file)) for param in param_whisper_faster.split()])
+                    whisper_proc, _ = start_named_proc(
+                        'whisper_faster',
+                        [param.replace('$whisper_file',whisper_file[15:]).replace('$input_file',wav_file[:-4]).replace('$language',language).replace('$output_dir',os.path.dirname(input_file)) for param in param_whisper_faster.split()]
+                    )
                 else:
                     self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
                     continue
-                proc.wait()
-                self._cleanup_process(proc)
+                whisper_proc.wait()
+                if whisper_file.startswith('ggml'):
+                    stop_named_proc('whisper')
+                else:
+                    stop_named_proc('whisper_faster')
 
                 input_file = wav_file[:-8]
                 output_file_path = os.path.join('project/gt_input', os.path.basename(input_file)+'.json')
@@ -1433,60 +1464,62 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 语音识别完成！")
 
             if need_translate and ('sakura' in translator or 'llamacpp' in translator or 'galtransl' in translator):
-                self.status.emit("[INFO] 正在启动Llamacpp翻译器...")
                 if not sakura_file:
                     self.status.emit("[INFO] 未选择模型文件，跳过翻译步骤...")
                     need_translate = False
                 else:
-                    print(param_llama)
-                    proc = self._start_process([param.replace('$model_file',sakura_file).replace('$num_layers',sakura_mode).replace('$port', '8989') for param in param_llama.split()])
+                    _, duplicated = start_named_proc(
+                        'llama_translator',
+                        [param.replace('$model_file',sakura_file).replace('$num_layers',sakura_mode).replace('$port', '8989') for param in param_llama.split()]
+                    )
 
-                    self.status.emit("[INFO] 正在等待Sakura翻译器启动并确认/chat/completions可用...")
-                    expected_model = str(Path(sakura_file).name) if sakura_file else ""
-                    model_ready = False
-                    start_wait = time()
-                    while True:
-                        if self._stop_requested:
-                            break
-                        try:
-                            chat_resp = requests.post(
-                                "http://localhost:8989/v1/chat/completions",
-                                json={
-                                    "model": expected_model,
-                                    "messages": [{"role": "user", "content": "ping"}],
-                                    "max_tokens": 1,
-                                    "temperature": 0
-                                },
-                                timeout=8
-                            )
-                            if chat_resp.status_code == 200:
-                                try:
-                                    body = chat_resp.json()
-                                    if isinstance(body, dict) and body.get("choices"):
-                                        model_ready = True
-                                        self.status.emit("[INFO] Sakura翻译器启动并准备就绪！返回值：" + str(body)[:200])
-                                        break
-                                except Exception:
-                                    pass
-                        except requests.exceptions.RequestException:
-                            pass
-                        if time() - start_wait > 120:
-                            self.status.emit("[ERROR] Sakura翻译器启动超时或模型未加载成功。")
-                            self._cleanup_process(proc)
+                    if not duplicated:
+                        self.status.emit("[INFO] 正在等待Sakura翻译器启动并确认/chat/completions可用...")
+                        expected_model = str(Path(sakura_file).name) if sakura_file else ""
+                        model_ready = False
+                        start_wait = time()
+                        while True:
+                            if self._stop_requested:
+                                break
+                            try:
+                                chat_resp = requests.post(
+                                    "http://localhost:8989/v1/chat/completions",
+                                    json={
+                                        "model": expected_model,
+                                        "messages": [{"role": "user", "content": "ping"}],
+                                        "max_tokens": 1,
+                                        "temperature": 0
+                                    },
+                                    timeout=8
+                                )
+                                if chat_resp.status_code == 200:
+                                    try:
+                                        body = chat_resp.json()
+                                        if isinstance(body, dict) and body.get("choices"):
+                                            model_ready = True
+                                            self.status.emit("[INFO] Sakura翻译器启动并准备就绪！返回值：" + str(body)[:200])
+                                            break
+                                    except Exception:
+                                        pass
+                            except requests.exceptions.RequestException:
+                                pass
+                            if time() - start_wait > 120:
+                                self.status.emit("[ERROR] Sakura翻译器启动超时或模型未加载成功。")
+                                stop_named_proc('llama_translator')
+                                self.finished.emit()
+                                return
+                            sleep(1)
+
+                        if not model_ready and not self._stop_requested:
+                            self.status.emit("[ERROR] 未检测到目标模型，终止翻译流程。")
+                            stop_named_proc('llama_translator')
                             self.finished.emit()
                             return
-                        sleep(1)
 
-                    if not model_ready and not self._stop_requested:
-                        self.status.emit("[ERROR] 未检测到目标模型，终止翻译流程。")
-                        self._cleanup_process(proc)
-                        self.finished.emit()
-                        return
-
-                    if self._stop_requested:
-                        self._cleanup_process(proc)
-                        self.finished.emit()
-                        return
+                        if self._stop_requested:
+                            stop_named_proc('llama_translator')
+                            self.finished.emit()
+                            return
 
             if need_translate:
                 self.status.emit("[INFO] 正在进行翻译...")
@@ -1527,9 +1560,9 @@ class MainWorker(QObject):
 
                 self.status.emit("[INFO] 字幕文件生成完成！")
 
-        if proc:
+        if running_procs.get('llama_translator'):
             self.status.emit("[INFO] 正在关闭Llamacpp翻译器...")
-            self._cleanup_process(proc)
+            stop_named_proc('llama_translator')
 
         self.status.emit("[INFO] 所有文件处理完成！")
         self.finished.emit()
