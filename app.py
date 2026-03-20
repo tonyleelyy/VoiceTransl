@@ -4,7 +4,7 @@ os.chdir(sys._MEIPASS) if hasattr(sys, '_MEIPASS') else os.chdir(os.path.dirname
 import shutil
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime, QSize
-from PyQt5.QtWidgets import QApplication, QVBoxLayout, QFileDialog, QFrame, QSystemTrayIcon, QMenu, QAction, QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QVBoxLayout, QFileDialog, QFrame, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QCheckBox
 from qfluentwidgets import PushButton as QPushButton, TextEdit as QTextEdit, LineEdit as QLineEdit, ComboBox as QComboBox, Slider as QSlider, FluentWindow as QMainWindow, PlainTextEdit as QPlainTextEdit, SplashScreen
 from qfluentwidgets import FluentIcon, NavigationItemPosition, SubtitleLabel, TitleLabel, BodyLabel
 
@@ -115,6 +115,11 @@ class MainWindow(QMainWindow):
         if selected:
             self.output_dir_edit.setText(selected)
 
+    def update_output_dir_controls(self):
+        use_input_dir = self.use_input_dir_checkbox.isChecked() if hasattr(self, 'use_input_dir_checkbox') else False
+        self.output_dir_edit.setEnabled(not use_input_dir)
+        self.output_dir_button.setEnabled(not use_input_dir)
+
     def _normalize_drop_paths(self, mime_data):
         paths = []
         try:
@@ -202,6 +207,7 @@ class MainWindow(QMainWindow):
                 output_format = lines[10].strip()
                 subtitle_font = lines[11].strip() if len(lines) > 11 else ""
                 output_dir = lines[12].strip() if len(lines) > 12 else self.default_output_dir()
+                use_input_dir = (lines[13].strip().lower() == 'true') if len(lines) > 13 else False
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
@@ -217,9 +223,12 @@ class MainWindow(QMainWindow):
                 if subtitle_font:
                     self.subtitle_font_combo.setCurrentText(subtitle_font)
                 self.output_dir_edit.setText(output_dir)
+                self.use_input_dir_checkbox.setChecked(use_input_dir)
 
         if not self.output_dir_edit.text().strip():
             self.output_dir_edit.setText(self.default_output_dir())
+
+        self.update_output_dir_controls()
 
         if os.path.exists('whisper/param.txt'):
             with open('whisper/param.txt', 'r', encoding='utf-8') as f:
@@ -487,6 +496,10 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.output_dir_button.clicked.connect(self.browse_output_dir)
         output_dir_layout.addWidget(self.output_dir_button)
         self.input_output_layout.addLayout(output_dir_layout)
+
+        self.use_input_dir_checkbox = QCheckBox("输出到音频目录（每个文件输出到其所在目录）")
+        self.use_input_dir_checkbox.stateChanged.connect(self.update_output_dir_controls)
+        self.input_output_layout.addWidget(self.use_input_dir_checkbox)
 
         # Format Section
         self.input_output_layout.addWidget(BodyLabel("🎥 选择输出的字幕格式。"))
@@ -887,12 +900,13 @@ class MainWorker(QObject):
         output_format = self.master.output_format.currentText()
         subtitle_font = self.master.subtitle_font_combo.currentText()
         output_dir = self.master.output_dir_edit.text().strip() or self.master.default_output_dir()
+        use_input_dir = self.master.use_input_dir_checkbox.isChecked()
         output_dir = os.path.abspath(os.path.expanduser(output_dir))
         os.makedirs(output_dir, exist_ok=True)
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n")
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n")
 
         # save whisper param
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
@@ -1229,6 +1243,7 @@ class MainWorker(QObject):
         param_llama = self.master.param_llama.toPlainText()
         output_format = self.master.output_format.currentText()
         output_dir = self.master.output_dir_edit.text().strip() or self.master.default_output_dir()
+        use_input_dir = self.master.use_input_dir_checkbox.isChecked()
 
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
             f.write(param_whisper)
@@ -1240,7 +1255,10 @@ class MainWorker(QObject):
             f.write(param_llama)
 
         self.status.emit("[INFO] 正在初始化项目文件夹...")
-        self.status.emit(f"[INFO] 输出目录：{output_dir}")
+        if use_input_dir:
+            self.status.emit("[INFO] 已启用“输出到音频目录”，将按每个输入文件目录输出。")
+        else:
+            self.status.emit(f"[INFO] 输出目录：{output_dir}")
 
         os.makedirs('project/cache', exist_ok=True)
         if before_dict:
@@ -1375,6 +1393,10 @@ class MainWorker(QObject):
                         return
 
             self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(input_files)}个")
+            current_output_dir = output_dir
+            if use_input_dir:
+                current_output_dir = os.path.dirname(os.path.abspath(input_file)) or output_dir
+                self.status.emit(f"[INFO] 当前文件输出目录：{current_output_dir}")
             if need_translate:
                 reset_translation_workspace()
             else:
@@ -1388,14 +1410,14 @@ class MainWorker(QObject):
                 # Ensure original srt is available in output_dir for later merging
                 try:
                     orig_srt_src = os.path.abspath(input_file)
-                    orig_srt_dst = os.path.join(output_dir, os.path.basename(orig_srt_src))
+                    orig_srt_dst = os.path.join(current_output_dir, os.path.basename(orig_srt_src))
                     if os.path.exists(orig_srt_src):
                         shutil.copy(orig_srt_src, orig_srt_dst)
                 except Exception:
                     pass
                 if output_format == '双语LRC':
                     lrc_name = os.path.basename(input_file[:-4] + '.orig.lrc')
-                    lrc_output = os.path.join(output_dir, lrc_name)
+                    lrc_output = os.path.join(current_output_dir, lrc_name)
                     make_lrc(output_file_path, lrc_output)
                 input_file = input_file[:-4]
             else:
@@ -1445,7 +1467,7 @@ class MainWorker(QObject):
 
                 if output_format == '原文SRT' or output_format == '双语SRT':
                     srt_name = os.path.basename(input_file + '.srt')
-                    srt_output = os.path.join(output_dir, srt_name)
+                    srt_output = os.path.join(current_output_dir, srt_name)
                     make_srt(output_file_path, srt_output)
 
                 if output_format == '原文LRC' or output_format == '双语LRC':
@@ -1453,7 +1475,7 @@ class MainWorker(QObject):
                     if output_format == '双语LRC':
                         lrc_path = input_file + '.orig.lrc'
                     lrc_name = os.path.basename(lrc_path)
-                    lrc_output = os.path.join(output_dir, lrc_name)
+                    lrc_output = os.path.join(current_output_dir, lrc_name)
                     make_lrc(output_file_path, lrc_output)
 
                 if os.path.exists(wav_file):
@@ -1533,7 +1555,7 @@ class MainWorker(QObject):
                 self.status.emit("[INFO] 正在生成字幕文件...")
                 if output_format == '中文SRT' or output_format == '双语SRT':
                     zh_srt_name = os.path.basename(input_file + '.zh.srt')
-                    zh_srt_output = os.path.join(output_dir, zh_srt_name)
+                    zh_srt_output = os.path.join(current_output_dir, zh_srt_name)
                     make_srt(output_file_path.replace('gt_input','gt_output'), zh_srt_output)
 
                 if output_format == '中文LRC' or output_format == '双语LRC':
@@ -1541,21 +1563,21 @@ class MainWorker(QObject):
                     if output_format == '双语LRC':
                         lrc_path = input_file + '.zh.lrc'
                     lrc_name = os.path.basename(lrc_path)
-                    lrc_output = os.path.join(output_dir, lrc_name)
+                    lrc_output = os.path.join(current_output_dir, lrc_name)
                     make_lrc(output_file_path.replace('gt_input','gt_output'), lrc_output)
 
                 if output_format == '双语SRT':
                     combine_name = os.path.basename(input_file + '.combine.srt')
-                    combine_output = os.path.join(output_dir, combine_name)
-                    left = os.path.join(output_dir, os.path.basename(input_file + '.srt'))
-                    right = os.path.join(output_dir, os.path.basename(input_file + '.zh.srt'))
+                    combine_output = os.path.join(current_output_dir, combine_name)
+                    left = os.path.join(current_output_dir, os.path.basename(input_file + '.srt'))
+                    right = os.path.join(current_output_dir, os.path.basename(input_file + '.zh.srt'))
                     merge_srt_files([left, right], combine_output)
 
                 if output_format == '双语LRC':
                     combine_name = os.path.basename(input_file + '.combine.lrc')
-                    combine_output = os.path.join(output_dir, combine_name)
-                    left = os.path.join(output_dir, os.path.basename(input_file + '.orig.lrc'))
-                    right = os.path.join(output_dir, os.path.basename(input_file + '.zh.lrc'))
+                    combine_output = os.path.join(current_output_dir, combine_name)
+                    left = os.path.join(current_output_dir, os.path.basename(input_file + '.orig.lrc'))
+                    right = os.path.join(current_output_dir, os.path.basename(input_file + '.zh.lrc'))
                     merge_lrc_files([left, right], combine_output)
 
                 self.status.emit("[INFO] 字幕文件生成完成！")
