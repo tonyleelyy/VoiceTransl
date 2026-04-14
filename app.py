@@ -209,6 +209,56 @@ class MainWindow(QMainWindow):
             unique.append(item)
         return unique
 
+    def refresh_speech_model_lists(self):
+        if hasattr(self, 'whisper_file'):
+            current_whisper = self.whisper_file.currentText()
+            whisper_lst = [
+                i for i in os.listdir('whisper')
+                if i.startswith('ggml') and i.endswith('bin') and 'silero' not in i
+            ] + [
+                i for i in os.listdir('whisper-faster') if i.startswith('faster-whisper')
+            ] + ['不进行听写']
+            self.whisper_file.clear()
+            self.whisper_file.addItems(whisper_lst)
+            if current_whisper in whisper_lst:
+                self.whisper_file.setCurrentText(current_whisper)
+
+        if hasattr(self, 'uvr_file'):
+            current_uvr = self.uvr_file.currentText()
+            uvr_lst = [i for i in os.listdir('uvr') if i.endswith('onnx')]
+            self.uvr_file.clear()
+            self.uvr_file.addItems(uvr_lst)
+            if current_uvr in uvr_lst:
+                self.uvr_file.setCurrentText(current_uvr)
+
+    def refresh_language_model_lists(self):
+        if hasattr(self, 'sakura_file'):
+            current_model = self.sakura_file.currentText()
+            sakura_lst = [i for i in os.listdir('llama') if i.endswith('gguf')]
+            self.sakura_file.clear()
+            self.sakura_file.addItems(sakura_lst)
+            if current_model in sakura_lst:
+                self.sakura_file.setCurrentText(current_model)
+
+    def cancel_task(self):
+        self.status.emit("[INFO] 正在取消当前任务...")
+        try:
+            if self.worker:
+                self.worker.stop()
+        except Exception as e:
+            self.status.emit(f"[WARN] 停止worker时出错: {e}")
+
+        try:
+            if self.thread and self.thread.isRunning():
+                self.thread.quit()
+                if not self.thread.wait(2000):
+                    self.thread.terminate()
+                    self.thread.wait(2000)
+        except Exception as e:
+            self.status.emit(f"[WARN] 停止线程时出错: {e}")
+
+        self.status.emit("[INFO] 取消任务完成。")
+
     def load_config(self):
         # load config
         if os.path.exists('config.txt'):
@@ -533,6 +583,10 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.run_button.clicked.connect(self.run_worker)
         button_layout.addWidget(self.run_button)
 
+        self.cancel_button = QPushButton("⛔ 取消任务")
+        self.cancel_button.clicked.connect(self.cancel_task)
+        button_layout.addWidget(self.cancel_button)
+        
         self.open_output_button = QPushButton("📁 打开输出目录")
         self.open_output_button.clicked.connect(lambda: open_path(self.output_dir_edit.text().strip() or self.default_output_dir()))
         button_layout.addWidget(self.open_output_button)
@@ -598,12 +652,19 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.param_whisper_faster.setPlaceholderText("每个参数空格隔开，请参考Faster Whisper文档，不清楚请保持默认。")
         self.settings_layout.addWidget(self.param_whisper_faster)
 
+        button_layout = QHBoxLayout()
+
         self.open_whisper_dir = QPushButton("📁 打开Whisper目录")
         self.open_whisper_dir.clicked.connect(lambda: open_path(os.path.join(os.getcwd(),'whisper')))
         self.open_faster_dir = QPushButton("📁 打开Faster Whisper目录")
         self.open_faster_dir.clicked.connect(lambda: open_path(os.path.join(os.getcwd(),'whisper-faster')))
-        self.settings_layout.addWidget(self.open_whisper_dir)
-        self.settings_layout.addWidget(self.open_faster_dir)
+        button_layout.addWidget(self.open_whisper_dir)
+        button_layout.addWidget(self.open_faster_dir)
+
+        self.refresh_speech_models_button = QPushButton("🔄 刷新语音模型列表")
+        self.refresh_speech_models_button.clicked.connect(self.refresh_speech_model_lists)
+        button_layout.addWidget(self.refresh_speech_models_button)
+        self.settings_layout.addLayout(button_layout)
 
         # UVR models move into speech settings for consistency
         self.settings_layout.addWidget(BodyLabel("🎤 选择用于伴奏分离的模型文件。"))
@@ -658,13 +719,20 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.param_llama.setPlaceholderText("每个参数空格隔开，请参考Llama.cpp文档，不清楚请保持默认。")
         self.advanced_settings_layout.addWidget(self.param_llama)
 
+        button_layout = QHBoxLayout()
+
         self.open_model_dir = QPushButton("📁 打开离线模型目录")
         self.open_model_dir.clicked.connect(lambda: open_path(os.path.join(os.getcwd(),'llama')))
-        self.advanced_settings_layout.addWidget(self.open_model_dir)
+        button_layout.addWidget(self.open_model_dir)
+
+        self.refresh_language_models_button = QPushButton("🔄 刷新离线模型列表")
+        self.refresh_language_models_button.clicked.connect(self.refresh_language_model_lists)
+        button_layout.addWidget(self.refresh_language_models_button)
 
         self.test_online_button = QPushButton("🔍 测试模型API并列出可用模型")
         self.test_online_button.clicked.connect(self.run_test_online_api)
-        self.advanced_settings_layout.addWidget(self.test_online_button)
+        button_layout.addWidget(self.test_online_button)
+        self.advanced_settings_layout.addLayout(button_layout)
 
         self.addSubInterface(self.advanced_settings_tab, FluentIcon.SETTING, "语言模型", NavigationItemPosition.TOP)
 
