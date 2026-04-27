@@ -46,7 +46,7 @@ dictionary:
 backendSpecific:
   GPT35: # GPT3.5 API
     tokens:
-      - token: sk-e615ad13a6144534b3c6e2b3c9053365
+      - token: Null
         endpoint: ""
     defaultEndpoint: https://api.deepseek.com
     rewriteModelName: "deepseek-chat"
