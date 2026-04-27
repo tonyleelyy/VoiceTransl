@@ -1494,7 +1494,10 @@ class MainWorker(QObject):
                     self._cleanup_process(target)
 
         # 串行流程：仅听写（不翻译）或 本地模型翻译（避免双GPU竞争）
-        is_online_translator = translator in ONLINE_TRANSLATOR_MAPPING or translator == 'gpt-custom'
+        REAL_ONLINE_TRANSLATORS = [*ONLINE_TRANSLATOR_MAPPING]
+        REAL_ONLINE_TRANSLATORS.remove('ollama')
+        REAL_ONLINE_TRANSLATORS.remove('llamacpp')
+        is_online_translator = translator in REAL_ONLINE_TRANSLATORS or translator == 'gpt-custom'
         use_pipeline = need_translate and is_online_translator
 
         if not use_pipeline:
