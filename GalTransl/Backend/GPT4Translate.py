@@ -562,13 +562,13 @@ class CGPT4Translate:
             json_lines = "\n".join(
                 [json.dumps(obj, ensure_ascii=False) for obj in tmp_context]
             )
-            self.chatbot.conversation["default"].append(
+            self.chatbot.conversation["default"].extend([
                 {"role": "user", "content": "(History Translation Request)"},
                 {
                     "role": "assistant",
                     "content": f"Transl: \n```jsonline\n{json_lines}\n```",
                 },
-            )
+            ])
             LOGGER.info("-> 恢复了上下文")
 
         elif self.eng_type == "unoffapi":

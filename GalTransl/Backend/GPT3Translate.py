@@ -463,13 +463,13 @@ class CGPT35Translate:
                 current_tran = current_tran.prev_tran
 
             tmp_context.reverse()
-            self.chatbot.conversation["default"].append(
+            self.chatbot.conversation["default"].extend([
                 {"role": "user", "content": "(History Translation Request)"},
                 {
                     "role": "assistant",
                     "content": "Transl: " + json.dumps(tmp_context, ensure_ascii=False),
                 }
-            )
+            ])
             LOGGER.info("-> 恢复了上下文")
 
         elif self.eng_type == "unoffapi":
