@@ -5,13 +5,16 @@ import shutil
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime, QSize
 from PyQt5.QtWidgets import QApplication, QVBoxLayout, QFileDialog, QFrame, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QCheckBox
-from qfluentwidgets import PushButton as QPushButton, TextEdit as QTextEdit, LineEdit as QLineEdit, ComboBox as QComboBox, Slider as QSlider, FluentWindow as QMainWindow, PlainTextEdit as QPlainTextEdit, SplashScreen
+from qfluentwidgets import PushButton as QPushButton, TextEdit as QTextEdit, LineEdit as QLineEdit, ComboBox as QComboBox, Slider as QSlider, FluentWindow as QMainWindow, PlainTextEdit as QPlainTextEdit, SplashScreen, SpinBox as QSpinBox
 from qfluentwidgets import FluentIcon, NavigationItemPosition, SubtitleLabel, TitleLabel, BodyLabel
 
 import re
 import asyncio
 import json
 import yaml
+import threading
+import queue
+from dataclasses import dataclass
 import requests
 import httpx
 from openai import OpenAI
@@ -34,6 +37,7 @@ from srt2prompt import make_prompt, merge_srt_files
 from GalTransl.ConfigHelper import CProjectConfig
 from GalTransl.Runner import run_galtransl
 from GalTransl.Backend.V3 import handle_special_api
+from GalTransl.Concurrency import ConcurrentTranslationPool
 
 ONLINE_TRANSLATOR_MAPPING = {
     'moonshot': 'https://api.moonshot.cn',
@@ -63,6 +67,15 @@ TRANSLATOR_SUPPORTED = [
 LOG_PATH = 'log.txt'
 sys.stdout = open(LOG_PATH, 'w', encoding='utf-8')
 sys.stderr = sys.stdout
+
+@dataclass
+class TranscribedFile:
+    """已听写完成的文件上下文，传递给翻译线程"""
+    base_path: str       # 文件基本路径（无扩展名），如 /path/to/file
+    json_src: str        # 听写产出的 JSON 路径（在 cache/transcribed/ 下）
+    output_dir: str      # 该文件的输出目录
+    output_format: str   # 输出格式（如 '中文SRT', '双语SRT'）
+    orig_srt_path: str   # 原始 SRT 路径（用于双语合并，空串表示无）
 
 class Widget(QFrame):
 
@@ -278,6 +291,7 @@ class MainWindow(QMainWindow):
                 subtitle_font = lines[11].strip() if len(lines) > 11 else ""
                 output_dir = lines[12].strip() if len(lines) > 12 else self.default_output_dir()
                 use_input_dir = (lines[13].strip().lower() == 'true') if len(lines) > 13 else False
+                max_concurrent = int(lines[14].strip()) if len(lines) > 14 else 5
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
@@ -294,6 +308,7 @@ class MainWindow(QMainWindow):
                     self.subtitle_font_combo.setCurrentText(subtitle_font)
                 self.output_dir_edit.setText(output_dir)
                 self.use_input_dir_checkbox.setChecked(use_input_dir)
+                self.max_concurrent_spin.setValue(max_concurrent)
 
         if not self.output_dir_edit.text().strip():
             self.output_dir_edit.setText(self.default_output_dir())
@@ -683,10 +698,19 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.advanced_settings_layout = self.advanced_settings_tab.vBoxLayout
 
         # Translator Section
-        self.advanced_settings_layout.addWidget(BodyLabel("🤖 选择用于翻译的模型类别。"))
+        model_row = QHBoxLayout()
+        model_row.addWidget(BodyLabel("🤖 用于翻译的模型类别："))
         self.translator_group = QComboBox()
         self.translator_group.addItems(TRANSLATOR_SUPPORTED)
-        self.advanced_settings_layout.addWidget(self.translator_group)
+        model_row.addWidget(self.translator_group)
+        model_row.addSpacing(20)
+        model_row.addWidget(BodyLabel("在线翻译最大并发数："))
+        self.max_concurrent_spin = QSpinBox()
+        self.max_concurrent_spin.setRange(1, 20)
+        self.max_concurrent_spin.setValue(5)
+        model_row.addWidget(self.max_concurrent_spin)
+        model_row.addStretch()
+        self.advanced_settings_layout.addLayout(model_row)
         
         self.advanced_settings_layout.addWidget(BodyLabel("🚀 在线模型令牌"))
         self.gpt_token = QLineEdit()
@@ -969,12 +993,15 @@ class MainWorker(QObject):
         self.master = master
         self.status = master.status
         self.child_processes = []
+        self._child_processes_lock = threading.Lock()
         self._stop_requested = False
+        self.stop_event = threading.Event()
 
     def _start_process(self, args):
         creationflags = 0x08000000 if os.name == 'nt' else 0
         proc = subprocess.Popen(args, stdout=sys.stdout, stderr=sys.stdout, creationflags=creationflags)
-        self.child_processes.append(proc)
+        with self._child_processes_lock:
+            self.child_processes.append(proc)
         self.pid = proc
         return proc
 
@@ -991,16 +1018,22 @@ class MainWorker(QObject):
             except Exception:
                 pass
         finally:
-            if proc in self.child_processes:
-                self.child_processes.remove(proc)
+            with self._child_processes_lock:
+                if proc in self.child_processes:
+                    self.child_processes.remove(proc)
 
     def _terminate_all_children(self):
-        for proc in list(self.child_processes):
+        with self._child_processes_lock:
+            children = list(self.child_processes)
+        for proc in children:
             self._cleanup_process(proc)
 
     def stop(self):
         self._stop_requested = True
+        self.stop_event.set()
         self._terminate_all_children()
+        if hasattr(self, '_translation_pool') and self._translation_pool:
+            self._translation_pool.stop()
 
     @error_handler
     def save_config(self):
@@ -1024,7 +1057,7 @@ class MainWorker(QObject):
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n")
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n{self.master.max_concurrent_spin.value()}\n")
 
         # save whisper param
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
@@ -1452,27 +1485,307 @@ class MainWorker(QObject):
             ) else 'gpt35-1106'
 
         running_procs = {}
+        proc_lock = threading.Lock()
 
         def start_named_proc(proc_name, args):
-            existing = running_procs.get(proc_name)
-            if existing and existing.poll() is None:
-                self.status.emit(f"[WARN] 检测到进程 {proc_name} 已在运行，跳过重复启动。")
-                return existing, True
-            if existing:
-                self._cleanup_process(existing)
-                running_procs.pop(proc_name, None)
+            with proc_lock:
+                existing = running_procs.get(proc_name)
+                if existing and existing.poll() is None:
+                    self.status.emit(f"[WARN] 检测到进程 {proc_name} 已在运行，跳过重复启动。")
+                    return existing, True
+                if existing:
+                    self._cleanup_process(existing)
+                    running_procs.pop(proc_name, None)
 
-            new_proc = self._start_process(args)
-            running_procs[proc_name] = new_proc
-            return new_proc, False
+                new_proc = self._start_process(args)
+                running_procs[proc_name] = new_proc
+                return new_proc, False
 
         def stop_named_proc(proc_name):
-            target = running_procs.pop(proc_name, None)
-            if target:
-                self._cleanup_process(target)
+            with proc_lock:
+                target = running_procs.pop(proc_name, None)
+                if target:
+                    self._cleanup_process(target)
 
+        # 串行流程：仅听写（不翻译）或 本地模型翻译（避免双GPU竞争）
+        REAL_ONLINE_TRANSLATORS = [*ONLINE_TRANSLATOR_MAPPING]
+        REAL_ONLINE_TRANSLATORS.remove('ollama')
+        REAL_ONLINE_TRANSLATORS.remove('llamacpp')
+        is_online_translator = translator in REAL_ONLINE_TRANSLATORS or translator == 'gpt-custom'
+        use_pipeline = need_translate and is_online_translator
+
+        if not use_pipeline:
+            for idx, input_file in enumerate(input_files):
+                if self.stop_event.is_set():
+                    break
+                if not os.path.exists(input_file):
+                    if input_file.startswith('BV'):
+                        self.status.emit("[INFO] 正在下载视频...")
+                        res = send_request(URL_VIDEO_INFO, params={'bvid': input_file})
+                        download([Video(
+                            bvid=res['bvid'],
+                            cid=res['cid'] if res['videos'] == 1 else res['pages'][0]['cid'],
+                            title=res['title'] if res['videos'] == 1 else res['pages'][0]['part'],
+                            up_name=res['owner']['name'],
+                            cover_url=res['pic'] if res['videos'] == 1 else res['pages'][0]['pic'],
+                        )], False)
+                        self.status.emit("[INFO] 视频下载完成！")
+                        title = res['title'] if res['videos'] == 1 else res['pages'][0]['part']
+                        title = re.sub(r'[.:?/\\]', ' ', title).strip()
+                        title = re.sub(r'\s+', ' ', title)
+                        downloaded_file = os.path.abspath(f"{title}_{res['bvid']}.mp4")
+                        target_file = os.path.join(output_dir, os.path.basename(downloaded_file))
+                        if os.path.exists(downloaded_file):
+                            if os.path.exists(target_file):
+                                os.remove(target_file)
+                            input_file = shutil.move(downloaded_file, target_file)
+                        else:
+                            self.status.emit(f"[ERROR] 下载完成但未找到文件：{downloaded_file}")
+                            self.finished.emit()
+                            return
+
+                    else:
+                        ydl_outtmpl = os.path.join(output_dir, 'YoutubeDL_%(title)s_%(id)s.%(ext)s')
+                        if proxy_address:
+                            ydl_ctx = YoutubeDL({'proxy': proxy_address, 'outtmpl': ydl_outtmpl})
+                        else:
+                            ydl_ctx = YoutubeDL({'outtmpl': ydl_outtmpl})
+
+                        with ydl_ctx as ydl:
+                            self.status.emit("[INFO] 正在下载视频...")
+                            info = ydl.extract_info(input_file, download=True)
+                            self.status.emit("[INFO] 视频下载完成！")
+                            input_file = ydl.prepare_filename(info)
+                            requested_downloads = info.get('requested_downloads') if isinstance(info, dict) else None
+                            if requested_downloads and isinstance(requested_downloads[0], dict):
+                                actual_file = requested_downloads[0].get('filepath')
+                                if actual_file:
+                                    input_file = actual_file
+                            if isinstance(info, dict) and info.get('_filename') and os.path.exists(info.get('_filename')):
+                                input_file = info.get('_filename')
+
+                        input_file = os.path.abspath(str(input_file or ''))
+                        if not os.path.exists(input_file):
+                            self.status.emit(f"[ERROR] 下载完成但未找到文件：{input_file}")
+                            self.finished.emit()
+                            return
+
+                self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(input_files)}个")
+                current_output_dir = output_dir
+                if use_input_dir:
+                    current_output_dir = os.path.dirname(os.path.abspath(input_file)) or output_dir
+                    self.status.emit(f"[INFO] 当前文件输出目录：{current_output_dir}")
+
+                if need_translate:
+                    reset_translation_workspace()
+                else:
+                    os.makedirs('project/gt_input', exist_ok=True)
+
+                if input_file.endswith('.srt'):
+                    self.status.emit("[INFO] 正在进行字幕转换...")
+                    output_file_path = os.path.join('project/gt_input', os.path.basename(input_file).replace('.srt','.json'))
+                    make_prompt(input_file, output_file_path)
+                    self.status.emit("[INFO] 字幕转换完成！")
+                    try:
+                        orig_srt_src = os.path.abspath(input_file)
+                        orig_srt_dst = os.path.join(current_output_dir, os.path.basename(orig_srt_src))
+                        if os.path.exists(orig_srt_src):
+                            shutil.copy(orig_srt_src, orig_srt_dst)
+                    except Exception:
+                        pass
+                    if output_format == '双语LRC':
+                        lrc_name = os.path.basename(input_file[:-4] + '.orig.lrc')
+                        lrc_output = os.path.join(current_output_dir, lrc_name)
+                        make_lrc(output_file_path, lrc_output)
+                    input_file = input_file[:-4]
+                else:
+                    if whisper_file == '不进行听写':
+                        self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
+                        continue
+
+                    wav_file = '.'.join(input_file.split('.')[:-1]) + '.16k.wav'
+                    self.status.emit("[INFO] 正在进行音频提取...")
+                    ffmpeg_proc, _ = start_named_proc(
+                        'ffmpeg_extract',
+                        ['ffmpeg/ffmpeg', '-y', '-i', input_file, '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', wav_file]
+                    )
+                    ffmpeg_proc.wait()
+                    stop_named_proc('ffmpeg_extract')
+
+                    if not os.path.exists(wav_file):
+                        self.status.emit("[ERROR] 音频提取失败，请检查文件格式！")
+                        break
+
+                    self.status.emit("[INFO] 正在进行语音识别...")
+
+                    if whisper_file.startswith('ggml'):
+                        print(param_whisper)
+                        whisper_proc, _ = start_named_proc(
+                            'whisper',
+                            [param.replace('$whisper_file',whisper_file).replace('$input_file',wav_file[:-4]).replace('$language',language) for param in param_whisper.split()]
+                        )
+                    elif whisper_file.startswith('faster-whisper'):
+                        print(param_whisper_faster)
+                        whisper_proc, _ = start_named_proc(
+                            'whisper_faster',
+                            [param.replace('$whisper_file',whisper_file[15:]).replace('$input_file',wav_file[:-4]).replace('$language',language).replace('$output_dir',os.path.dirname(input_file)) for param in param_whisper_faster.split()]
+                        )
+                    else:
+                        self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
+                        continue
+                    whisper_proc.wait()
+                    if whisper_file.startswith('ggml'):
+                        stop_named_proc('whisper')
+                    else:
+                        stop_named_proc('whisper_faster')
+
+                    input_file = wav_file[:-8]
+                    output_file_path = os.path.join('project/gt_input', os.path.basename(input_file)+'.json')
+                    make_prompt(wav_file[:-4]+'.srt', output_file_path)
+
+                    if output_format == '原文SRT' or output_format == '双语SRT':
+                        srt_name = os.path.basename(input_file + '.srt')
+                        srt_output = os.path.join(current_output_dir, srt_name)
+                        make_srt(output_file_path, srt_output)
+
+                    if output_format == '原文LRC' or output_format == '双语LRC':
+                        lrc_path = input_file + '.lrc'
+                        if output_format == '双语LRC':
+                            lrc_path = input_file + '.orig.lrc'
+                        lrc_name = os.path.basename(lrc_path)
+                        lrc_output = os.path.join(current_output_dir, lrc_name)
+                        make_lrc(output_file_path, lrc_output)
+
+                    if os.path.exists(wav_file):
+                        os.remove(wav_file)
+
+                    if os.path.exists(wav_file[:-4]+'.srt'):
+                        os.remove(wav_file[:-4]+'.srt')
+                    self.status.emit("[INFO] 语音识别完成！")
+
+                # 翻译阶段（本地模型串行）
+                if need_translate and ('sakura' in translator or 'llamacpp' in translator or 'galtransl' in translator):
+                    if not sakura_file:
+                        self.status.emit("[INFO] 未选择模型文件，跳过翻译步骤...")
+                        need_translate = False
+                    else:
+                        _, duplicated = start_named_proc(
+                            'llama_translator',
+                            [param.replace('$model_file',sakura_file).replace('$num_layers',sakura_mode).replace('$port', '8989') for param in param_llama.split()]
+                        )
+
+                        if not duplicated:
+                            self.status.emit("[INFO] 正在等待Sakura翻译器启动并确认/chat/completions可用...")
+                            expected_model = str(Path(sakura_file).name) if sakura_file else ""
+                            model_ready = False
+                            start_wait = time()
+                            while True:
+                                if self.stop_event.is_set():
+                                    break
+                                try:
+                                    chat_resp = requests.post(
+                                        "http://localhost:8989/v1/chat/completions",
+                                        json={
+                                            "model": expected_model,
+                                            "messages": [{"role": "user", "content": "ping"}],
+                                            "max_tokens": 1,
+                                            "temperature": 0
+                                        },
+                                        timeout=8
+                                    )
+                                    if chat_resp.status_code == 200:
+                                        try:
+                                            body = chat_resp.json()
+                                            if isinstance(body, dict) and body.get("choices"):
+                                                model_ready = True
+                                                self.status.emit("[INFO] Sakura翻译器启动并准备就绪！返回值：" + str(body)[:200])
+                                                break
+                                        except Exception:
+                                            pass
+                                except requests.exceptions.RequestException:
+                                    pass
+                                if time() - start_wait > 120:
+                                    self.status.emit("[ERROR] Sakura翻译器启动超时或模型未加载成功。")
+                                    stop_named_proc('llama_translator')
+                                    self.finished.emit()
+                                    return
+                                sleep(1)
+
+                            if not model_ready and not self.stop_event.is_set():
+                                self.status.emit("[ERROR] 未检测到目标模型，终止翻译流程。")
+                                stop_named_proc('llama_translator')
+                                self.finished.emit()
+                                return
+
+                            if self.stop_event.is_set():
+                                stop_named_proc('llama_translator')
+                                self.finished.emit()
+                                return
+
+                if need_translate:
+                    self.status.emit("[INFO] 正在进行翻译...")
+                    try:
+                        cfg = CProjectConfig('project', 'config.yaml')
+                        asyncio.run(run_galtransl(cfg, engine))
+                    except Exception as e:
+                        self.status.emit(f"[ERROR] 翻译过程中发生错误: {e}")
+                        continue
+
+                    self.status.emit("[INFO] 正在生成字幕文件...")
+                    if output_format == '中文SRT' or output_format == '双语SRT':
+                        zh_srt_name = os.path.basename(input_file + '.zh.srt')
+                        zh_srt_output = os.path.join(current_output_dir, zh_srt_name)
+                        make_srt(output_file_path.replace('gt_input','gt_output'), zh_srt_output)
+
+                    if output_format == '中文LRC' or output_format == '双语LRC':
+                        lrc_path = input_file + '.lrc'
+                        if output_format == '双语LRC':
+                            lrc_path = input_file + '.zh.lrc'
+                        lrc_name = os.path.basename(lrc_path)
+                        lrc_output = os.path.join(current_output_dir, lrc_name)
+                        make_lrc(output_file_path.replace('gt_input','gt_output'), lrc_output)
+
+                    if output_format == '双语SRT':
+                        combine_name = os.path.basename(input_file + '.combine.srt')
+                        combine_output = os.path.join(current_output_dir, combine_name)
+                        left = os.path.join(current_output_dir, os.path.basename(input_file + '.srt'))
+                        right = os.path.join(current_output_dir, os.path.basename(input_file + '.zh.srt'))
+                        merge_srt_files([left, right], combine_output)
+
+                    if output_format == '双语LRC':
+                        combine_name = os.path.basename(input_file + '.combine.lrc')
+                        combine_output = os.path.join(current_output_dir, combine_name)
+                        left = os.path.join(current_output_dir, os.path.basename(input_file + '.orig.lrc'))
+                        right = os.path.join(current_output_dir, os.path.basename(input_file + '.zh.lrc'))
+                        merge_lrc_files([left, right], combine_output)
+
+                    self.status.emit("[INFO] 字幕文件生成完成！")
+
+            if running_procs.get('llama_translator'):
+                self.status.emit("[INFO] 正在关闭Llamacpp翻译器...")
+                stop_named_proc('llama_translator')
+
+            self.status.emit("[INFO] 所有文件处理完成！")
+            self.finished.emit()
+            return
+
+        # 流水线流程：听写线程 + 翻译线程并行
+        transcribed_dir = os.path.join('project', 'cache', 'transcribed')
+        os.makedirs(transcribed_dir, exist_ok=True)
+        # 创建并发翻译线程池
+        max_concurrent = self.master.max_concurrent_spin.value()
+
+        self._translation_pool = ConcurrentTranslationPool(
+            project_dir='project',
+            base_config_path='project/config.yaml',
+            max_concurrent=max_concurrent,
+            stop_event=self.stop_event,
+        )
+        self._translation_pool.start(engine, self.status.emit)
+
+        # 主线程：顺序执行下载+听写，产出放入队列
         for idx, input_file in enumerate(input_files):
-            if self._stop_requested:
+            if self.stop_event.is_set():
                 break
             if not os.path.exists(input_file):
                 if input_file.startswith('BV'):
@@ -1497,8 +1810,8 @@ class MainWorker(QObject):
                         input_file = shutil.move(downloaded_file, target_file)
                     else:
                         self.status.emit(f"[ERROR] 下载完成但未找到文件：{downloaded_file}")
-                        self.finished.emit()
-                        return
+                        self.stop_event.set()
+                        break
 
                 else:
                     ydl_outtmpl = os.path.join(output_dir, 'YoutubeDL_%(title)s_%(id)s.%(ext)s')
@@ -1523,25 +1836,24 @@ class MainWorker(QObject):
                     input_file = os.path.abspath(str(input_file or ''))
                     if not os.path.exists(input_file):
                         self.status.emit(f"[ERROR] 下载完成但未找到文件：{input_file}")
-                        self.finished.emit()
-                        return
+                        self.stop_event.set()
+                        break
 
             self.status.emit(f"[INFO] 当前处理文件：{input_file} 第{idx+1}个，共{len(input_files)}个")
             current_output_dir = output_dir
             if use_input_dir:
                 current_output_dir = os.path.dirname(os.path.abspath(input_file)) or output_dir
                 self.status.emit(f"[INFO] 当前文件输出目录：{current_output_dir}")
-            if need_translate:
-                reset_translation_workspace()
-            else:
-                os.makedirs('project/gt_input', exist_ok=True)
+
+            tf: TranscribedFile | None = None
 
             if input_file.endswith('.srt'):
+                # —— SRT 输入：直接转换 ——
                 self.status.emit("[INFO] 正在进行字幕转换...")
-                output_file_path = os.path.join('project/gt_input', os.path.basename(input_file).replace('.srt','.json'))
-                make_prompt(input_file, output_file_path)
+                json_path = os.path.join(transcribed_dir, os.path.basename(input_file).replace('.srt', '.json'))
+                make_prompt(input_file, json_path)
                 self.status.emit("[INFO] 字幕转换完成！")
-                # Ensure original srt is available in output_dir for later merging
+                # 复制原始 SRT 到输出目录（供双语合并用）
                 try:
                     orig_srt_src = os.path.abspath(input_file)
                     orig_srt_dst = os.path.join(current_output_dir, os.path.basename(orig_srt_src))
@@ -1549,12 +1861,20 @@ class MainWorker(QObject):
                         shutil.copy(orig_srt_src, orig_srt_dst)
                 except Exception:
                     pass
+                # 原文 LRC（双语 LRC 需要）
                 if output_format == '双语LRC':
-                    lrc_name = os.path.basename(input_file[:-4] + '.orig.lrc')
-                    lrc_output = os.path.join(current_output_dir, lrc_name)
-                    make_lrc(output_file_path, lrc_output)
-                input_file = input_file[:-4]
+                    lrc_output = os.path.join(current_output_dir, os.path.basename(input_file[:-4] + '.orig.lrc'))
+                    make_lrc(json_path, lrc_output)
+                base_path = input_file[:-4]  # 去掉 .srt
+                tf = TranscribedFile(
+                    base_path=base_path,
+                    json_src=json_path,
+                    output_dir=current_output_dir,
+                    output_format=output_format,
+                    orig_srt_path=os.path.abspath(input_file),
+                )
             else:
+                # 音视频输入：提取音频 → 听写
                 if whisper_file == '不进行听写':
                     self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
                     continue
@@ -1595,130 +1915,49 @@ class MainWorker(QObject):
                 else:
                     stop_named_proc('whisper_faster')
 
-                input_file = wav_file[:-8]
-                output_file_path = os.path.join('project/gt_input', os.path.basename(input_file)+'.json')
-                make_prompt(wav_file[:-4]+'.srt', output_file_path)
+                base_path = wav_file[:-8]  # 去掉 .16k.wav
+                json_path = os.path.join(transcribed_dir, os.path.basename(base_path) + '.json')
+                make_prompt(wav_file[:-4] + '.srt', json_path)
 
+                # 生成原文 SRT/LRC 输出
                 if output_format == '原文SRT' or output_format == '双语SRT':
-                    srt_name = os.path.basename(input_file + '.srt')
-                    srt_output = os.path.join(current_output_dir, srt_name)
-                    make_srt(output_file_path, srt_output)
+                    srt_output = os.path.join(current_output_dir, os.path.basename(base_path + '.srt'))
+                    make_srt(json_path, srt_output)
 
                 if output_format == '原文LRC' or output_format == '双语LRC':
-                    lrc_path = input_file + '.lrc'
+                    lrc_name = os.path.basename(base_path + '.lrc')
                     if output_format == '双语LRC':
-                        lrc_path = input_file + '.orig.lrc'
-                    lrc_name = os.path.basename(lrc_path)
+                        lrc_name = os.path.basename(base_path + '.orig.lrc')
                     lrc_output = os.path.join(current_output_dir, lrc_name)
-                    make_lrc(output_file_path, lrc_output)
+                    make_lrc(json_path, lrc_output)
 
+                # 清理临时文件
                 if os.path.exists(wav_file):
                     os.remove(wav_file)
+                if os.path.exists(wav_file[:-4] + '.srt'):
+                    os.remove(wav_file[:-4] + '.srt')
 
-                if os.path.exists(wav_file[:-4]+'.srt'):
-                    os.remove(wav_file[:-4]+'.srt')
                 self.status.emit("[INFO] 语音识别完成！")
 
-            if need_translate and ('sakura' in translator or 'llamacpp' in translator or 'galtransl' in translator):
-                if not sakura_file:
-                    self.status.emit("[INFO] 未选择模型文件，跳过翻译步骤...")
-                    need_translate = False
-                else:
-                    _, duplicated = start_named_proc(
-                        'llama_translator',
-                        [param.replace('$model_file',sakura_file).replace('$num_layers',sakura_mode).replace('$port', '8989') for param in param_llama.split()]
-                    )
+                tf = TranscribedFile(
+                    base_path=base_path,
+                    json_src=json_path,
+                    output_dir=current_output_dir,
+                    output_format=output_format,
+                    orig_srt_path='',
+                )
 
-                    if not duplicated:
-                        self.status.emit("[INFO] 正在等待Sakura翻译器启动并确认/chat/completions可用...")
-                        expected_model = str(Path(sakura_file).name) if sakura_file else ""
-                        model_ready = False
-                        start_wait = time()
-                        while True:
-                            if self._stop_requested:
-                                break
-                            try:
-                                chat_resp = requests.post(
-                                    "http://localhost:8989/v1/chat/completions",
-                                    json={
-                                        "model": expected_model,
-                                        "messages": [{"role": "user", "content": "ping"}],
-                                        "max_tokens": 1,
-                                        "temperature": 0
-                                    },
-                                    timeout=8
-                                )
-                                if chat_resp.status_code == 200:
-                                    try:
-                                        body = chat_resp.json()
-                                        if isinstance(body, dict) and body.get("choices"):
-                                            model_ready = True
-                                            self.status.emit("[INFO] Sakura翻译器启动并准备就绪！返回值：" + str(body)[:200])
-                                            break
-                                    except Exception:
-                                        pass
-                            except requests.exceptions.RequestException:
-                                pass
-                            if time() - start_wait > 120:
-                                self.status.emit("[ERROR] Sakura翻译器启动超时或模型未加载成功。")
-                                stop_named_proc('llama_translator')
-                                self.finished.emit()
-                                return
-                            sleep(1)
+            if tf is not None:
+                self._translation_pool.submit(tf)
 
-                        if not model_ready and not self._stop_requested:
-                            self.status.emit("[ERROR] 未检测到目标模型，终止翻译流程。")
-                            stop_named_proc('llama_translator')
-                            self.finished.emit()
-                            return
+        # 发送哨兵，等待翻译线程结束
+        self.status.emit("[INFO] 所有文件听写完成，等待翻译线程处理剩余文件...")
+        self._translation_pool.done()
+        self._translation_pool.wait_all(timeout=600)
 
-                        if self._stop_requested:
-                            stop_named_proc('llama_translator')
-                            self.finished.emit()
-                            return
-
-            if need_translate:
-                self.status.emit("[INFO] 正在进行翻译...")
-                try:
-                    cfg = CProjectConfig('project','config.yaml')
-                    asyncio.run(run_galtransl(cfg, engine))
-                except Exception as e:
-                    self.status.emit(f"[ERROR] 翻译过程中发生错误: {e}")
-                    continue
-
-                self.status.emit("[INFO] 正在生成字幕文件...")
-                if output_format == '中文SRT' or output_format == '双语SRT':
-                    zh_srt_name = os.path.basename(input_file + '.zh.srt')
-                    zh_srt_output = os.path.join(current_output_dir, zh_srt_name)
-                    make_srt(output_file_path.replace('gt_input','gt_output'), zh_srt_output)
-
-                if output_format == '中文LRC' or output_format == '双语LRC':
-                    lrc_path = input_file + '.lrc'
-                    if output_format == '双语LRC':
-                        lrc_path = input_file + '.zh.lrc'
-                    lrc_name = os.path.basename(lrc_path)
-                    lrc_output = os.path.join(current_output_dir, lrc_name)
-                    make_lrc(output_file_path.replace('gt_input','gt_output'), lrc_output)
-
-                if output_format == '双语SRT':
-                    combine_name = os.path.basename(input_file + '.combine.srt')
-                    combine_output = os.path.join(current_output_dir, combine_name)
-                    left = os.path.join(current_output_dir, os.path.basename(input_file + '.srt'))
-                    right = os.path.join(current_output_dir, os.path.basename(input_file + '.zh.srt'))
-                    merge_srt_files([left, right], combine_output)
-
-                if output_format == '双语LRC':
-                    combine_name = os.path.basename(input_file + '.combine.lrc')
-                    combine_output = os.path.join(current_output_dir, combine_name)
-                    left = os.path.join(current_output_dir, os.path.basename(input_file + '.orig.lrc'))
-                    right = os.path.join(current_output_dir, os.path.basename(input_file + '.zh.lrc'))
-                    merge_lrc_files([left, right], combine_output)
-
-                self.status.emit("[INFO] 字幕文件生成完成！")
-
-        if running_procs.get('llama_translator'):
-            self.status.emit("[INFO] 正在关闭Llamacpp翻译器...")
-            stop_named_proc('llama_translator')
+        err_count = self._translation_pool.error_count
+        if err_count > 0:
+            self.status.emit(f"[WARN] {err_count} 个文件翻译失败，请检查日志。")
 
         self.status.emit("[INFO] 所有文件处理完成！")
         self.finished.emit()
