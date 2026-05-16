@@ -3,6 +3,7 @@ A simple wrapper for the official ChatGPT API
 """
 import json
 import os
+import re
 from importlib.resources import path
 from pathlib import Path
 from typing import AsyncGenerator
@@ -13,6 +14,26 @@ import tiktoken
 
 from . import typings as t
 from .utils import get_filtered_keys_from_object
+
+
+def is_local_address(api_address: str) -> bool:
+    """检查API地址是否为本地地址（自动绕过代理）"""
+    if not api_address:
+        return False
+    # 匹配 localhost, 127.0.0.1, ::1 (支持带端口的情况)
+    local_patterns = [
+        r'://localhost[:/\s]',
+        r'://localhost$',
+        r'://127\.0\.0\.1[:/\s]',
+        r'://127\.0\.0\.1$',
+        r'://\[?::1\]?[:/\s]',
+        r'://\[?::1\]?$',
+    ]
+    for pattern in local_patterns:
+        if re.search(pattern, api_address, re.IGNORECASE):
+            return True
+    return False
+
 
 def handle_special_api(api_address: str) -> str:
     if 'bigmodel' in api_address:
@@ -41,8 +62,8 @@ class Chatbot:
             return httpx.AsyncClient(proxy=proxy, **kwargs)
 
     def update_proxy(self, proxy: str) -> None:
-        # 本地地址忽略代理
-        if "127.0.0.1" in self.api_address or "localhost" in self.api_address:
+        # 本地地址自动绕过代理
+        if is_local_address(self.api_address):
             proxy = ""
 
         self.proxy = proxy
