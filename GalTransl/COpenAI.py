@@ -2,6 +2,7 @@
 CloseAI related classes
 """
 
+import re
 from httpx import AsyncClient
 from tqdm.asyncio import tqdm
 from time import time
@@ -9,7 +10,7 @@ from GalTransl import LOGGER
 from GalTransl.ConfigHelper import CProjectConfig, CProxy
 from typing import Optional, Tuple
 from random import choice
-from GalTransl.Backend.V3 import handle_special_api
+from GalTransl.Backend.V3 import handle_special_api, is_local_address
 TRANSLATOR_ENGINE = {
     "gpt35": "gpt-3.5-turbo",
     "gpt35-0613": "gpt-3.5-turbo-0613",
@@ -106,7 +107,11 @@ class COpenAITokenPool:
         # todo: do not remove token directly, we can score the token
         try:
             st = time()
-            proxy_value = proxy.addr if proxy else None
+            # 本地地址自动绕过代理
+            if is_local_address(token.domain):
+                proxy_value = None
+            else:
+                proxy_value = proxy.addr if proxy else None
             try:
                 client = AsyncClient(
                     proxies={"https://": proxy_value} if proxy_value else None
