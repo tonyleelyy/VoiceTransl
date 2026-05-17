@@ -481,6 +481,10 @@ class MainWindow(QMainWindow):
         self.output_dir_edit.setEnabled(not use_input_dir)
         self.output_dir_button.setEnabled(not use_input_dir)
 
+    def update_segment_controls(self):
+        enabled = self.enable_segment_checkbox.isChecked() if hasattr(self, 'enable_segment_checkbox') else False
+        self.segment_duration_spin.setEnabled(enabled)
+
     def _normalize_drop_paths(self, mime_data):
         paths = []
         try:
@@ -620,6 +624,8 @@ class MainWindow(QMainWindow):
                 output_dir = lines[12].strip() if len(lines) > 12 else self.default_output_dir()
                 use_input_dir = (lines[13].strip().lower() == 'true') if len(lines) > 13 else False
                 max_concurrent = int(lines[14].strip()) if len(lines) > 14 else 1
+                enable_segment = (lines[15].strip().lower() == 'true') if len(lines) > 15 else False
+                segment_duration = int(lines[16].strip()) if len(lines) > 16 else 10
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
@@ -637,6 +643,8 @@ class MainWindow(QMainWindow):
                 self.output_dir_edit.setText(output_dir)
                 self.use_input_dir_checkbox.setChecked(use_input_dir)
                 self.max_concurrent_spin.setValue(max_concurrent)
+                self.enable_segment_checkbox.setChecked(enable_segment)
+                self.segment_duration_spin.setValue(segment_duration)
 
         if not self.output_dir_edit.text().strip():
             self.output_dir_edit.setText(self.default_output_dir())
@@ -938,6 +946,20 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.use_input_dir_checkbox = QCheckBox("输出到音频目录（每个文件输出到其所在目录）")
         self.use_input_dir_checkbox.stateChanged.connect(self.update_output_dir_controls)
         self.input_output_layout.addWidget(self.use_input_dir_checkbox)
+
+        # Segment Section
+        segment_layout = QHBoxLayout()
+        self.enable_segment_checkbox = QCheckBox("启用音频分段处理（长音频分段后听写翻译再合并）")
+        self.enable_segment_checkbox.stateChanged.connect(self.update_segment_controls)
+        segment_layout.addWidget(self.enable_segment_checkbox)
+        segment_layout.addWidget(BodyLabel("分段时长（分钟）："))
+        self.segment_duration_spin = QSpinBox()
+        self.segment_duration_spin.setRange(1, 20)
+        self.segment_duration_spin.setValue(10)
+        self.segment_duration_spin.setEnabled(False)
+        segment_layout.addWidget(self.segment_duration_spin)
+        segment_layout.addStretch()
+        self.input_output_layout.addLayout(segment_layout)
 
         # Format Section
         self.input_output_layout.addWidget(BodyLabel("🎥 选择输出的字幕格式。"))
@@ -1407,10 +1429,12 @@ class MainWorker(QObject):
         use_input_dir = self.master.use_input_dir_checkbox.isChecked()
         output_dir = os.path.abspath(os.path.expanduser(output_dir))
         os.makedirs(output_dir, exist_ok=True)
+        enable_segment = self.master.enable_segment_checkbox.isChecked()
+        segment_duration = self.master.segment_duration_spin.value()
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n{self.master.max_concurrent_spin.value()}\n")
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n{self.master.max_concurrent_spin.value()}\n{enable_segment}\n{segment_duration}\n")
 
         # save whisper param
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
@@ -1744,6 +1768,217 @@ class MainWorker(QObject):
             
         self.finished.emit()
 
+    def _process_single_audio(self, wav_file, whisper_file, language, param_whisper, param_whisper_faster, json_path, start_named_proc, stop_named_proc):
+        """处理单个音频文件的听写"""
+        base_path = wav_file[:-8]  # 去掉 .16k.wav
+
+        if whisper_file.startswith('ggml'):
+            print(param_whisper)
+            whisper_proc, _ = start_named_proc(
+                'whisper',
+                [param.replace('$whisper_file',whisper_file).replace('$input_file',base_path).replace('$language',language) for param in param_whisper.split()]
+            )
+        elif whisper_file.startswith('faster-whisper'):
+            print(param_whisper_faster)
+            whisper_proc, _ = start_named_proc(
+                'whisper_faster',
+                [param.replace('$whisper_file',whisper_file[15:]).replace('$input_file',base_path).replace('$language',language).replace('$output_dir',os.path.dirname(wav_file)) for param in param_whisper_faster.split()]
+            )
+        else:
+            return
+        whisper_proc.wait()
+        if whisper_file.startswith('ggml'):
+            stop_named_proc('whisper')
+        else:
+            stop_named_proc('whisper_faster')
+
+        # 转换该片段的SRT到JSON
+        make_prompt(base_path + '.srt', json_path)
+
+    def _get_audio_duration(self, audio_file):
+        """获取音频文件时长（秒）"""
+        try:
+            result = subprocess.run(
+                ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                 '-of', 'default=noprint_wrappers=1:nokey=1', audio_file],
+                capture_output=True, text=True, timeout=30
+            )
+            return float(result.stdout.strip())
+        except Exception as e:
+            self.status.emit(f"[WARN] 获取音频时长失败: {e}")
+            return 0
+
+    def _split_audio(self, audio_file, segment_duration_minutes, output_dir):
+        """将音频文件切分为多个片段，返回片段路径列表"""
+        segment_files = []
+        segment_duration = segment_duration_minutes * 60  # 转换为秒
+
+        total_duration = self._get_audio_duration(audio_file)
+        if total_duration == 0:
+            return None, 0
+
+        num_segments = int(total_duration // segment_duration) + (1 if total_duration % segment_duration > 1 else 0)
+        base_name = os.path.basename(audio_file).rsplit('.', 1)[0]
+
+        self.status.emit(f"[INFO] 音频时长 {total_duration:.2f} 秒，将分为 {num_segments} 个片段处理")
+
+        for i in range(num_segments):
+            start_time = i * segment_duration
+            end_time = min((i + 1) * segment_duration, total_duration)
+            duration = end_time - start_time
+
+            segment_file = os.path.join(output_dir, f"{base_name}_segment_{i:04d}.wav")
+
+            try:
+                proc = subprocess.run(
+                    ['ffmpeg/ffmpeg', '-y', '-i', audio_file, '-ss', str(start_time),
+                     '-t', str(duration), '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', segment_file],
+                    capture_output=True, timeout=120
+                )
+                if proc.returncode == 0 and os.path.exists(segment_file):
+                    segment_files.append(segment_file)
+                else:
+                    self.status.emit(f"[ERROR] 切分片段 {i+1} 失败")
+            except Exception as e:
+                self.status.emit(f"[ERROR] 切分片段 {i+1} 失败: {e}")
+
+        return segment_files, total_duration
+
+    def _merge_segment_translations(self, segment_files, segment_tfs, original_base_path, output_json_path, final_output_dir, output_format):
+        """合并多个分段的翻译结果，调整时间戳并生成最终字幕文件"""
+        from prompt2srt import make_srt, make_lrc, merge_lrc_files
+        from srt2prompt import merge_srt_files
+
+        all_data = []
+        time_offset = 0
+        segment_srts_orig = []
+        segment_srts_zh = []
+        segment_lrcs_orig = []
+        segment_lrcs_zh = []
+
+        base_name = os.path.basename(original_base_path)
+
+        for i, segment_file in enumerate(segment_files):
+            segment_name = os.path.basename(segment_file[:-4])  # 去掉 .wav
+            segment_dir = os.path.dirname(segment_file)
+
+            # 确定使用哪个 JSON：如果有翻译后的 gt_output 则用它，否则用 transcribed
+            translated_json = os.path.join('project', 'cache', f'translate_{i}', 'gt_output', segment_name + '.json')
+            transcribed_json = os.path.join('project', 'cache', 'transcribed', segment_name + '.json')
+
+            json_path = translated_json if os.path.exists(translated_json) else transcribed_json
+
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    for entry in data:
+                        entry['start'] += time_offset
+                        entry['end'] += time_offset
+                        all_data.append(entry)
+                except Exception as e:
+                    self.status.emit(f"[WARN] 读取片段JSON失败: {e}")
+
+            # 收集分段的字幕文件（用于双语合并）
+            if output_format in ('原文SRT', '双语SRT'):
+                orig_srt = os.path.join(segment_dir, segment_name + '.srt')
+                if os.path.exists(orig_srt):
+                    segment_srts_orig.append(orig_srt)
+
+            if output_format in ('中文SRT', '双语SRT'):
+                zh_srt = os.path.join(segment_dir, segment_name + '.zh.srt')
+                if os.path.exists(zh_srt):
+                    segment_srts_zh.append(zh_srt)
+
+            if output_format in ('原文LRC', '双语LRC'):
+                orig_lrc = os.path.join(segment_dir, segment_name + '.lrc')
+                if os.path.exists(orig_lrc):
+                    segment_lrcs_orig.append(orig_lrc)
+
+            if output_format in ('中文LRC', '双语LRC'):
+                zh_lrc = os.path.join(segment_dir, segment_name + '.zh.lrc')
+                if os.path.exists(zh_lrc):
+                    segment_lrcs_zh.append(zh_lrc)
+
+            # 更新时间偏移
+            duration = self._get_audio_duration(segment_file)
+            if duration > 0:
+                time_offset += duration
+
+        # 保存合并后的JSON到 transcribed 目录
+        os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
+        with open(output_json_path, 'w', encoding='utf-8') as f:
+            json.dump(all_data, f, ensure_ascii=False, indent=4)
+
+        # 生成最终的合并字幕文件
+        if output_format in ('原文SRT', '双语SRT'):
+            final_srt = os.path.join(final_output_dir, base_name + '.srt')
+            if segment_srts_orig:
+                merge_srt_files(segment_srts_orig, final_srt)
+            else:
+                make_srt(output_json_path, final_srt)
+
+        if output_format in ('中文SRT', '双语SRT'):
+            final_zh_srt = os.path.join(final_output_dir, base_name + '.zh.srt')
+            if segment_srts_zh:
+                merge_srt_files(segment_srts_zh, final_zh_srt)
+            else:
+                # 从 gt_output 合并
+                make_srt(output_json_path, final_zh_srt)
+
+        if output_format == '双语SRT':
+            final_combine_srt = os.path.join(final_output_dir, base_name + '.combine.srt')
+            left = os.path.join(final_output_dir, base_name + '.srt')
+            right = os.path.join(final_output_dir, base_name + '.zh.srt')
+            if os.path.exists(left) and os.path.exists(right):
+                merge_srt_files([left, right], final_combine_srt)
+
+        if output_format in ('原文LRC', '双语LRC'):
+            final_lrc = os.path.join(final_output_dir, base_name + '.lrc')
+            if output_format == '双语LRC':
+                final_lrc = os.path.join(final_output_dir, base_name + '.orig.lrc')
+            if segment_lrcs_orig:
+                merge_lrc_files(segment_lrcs_orig, final_lrc)
+            else:
+                make_lrc(output_json_path, final_lrc)
+
+        if output_format in ('中文LRC', '双语LRC'):
+            final_zh_lrc = os.path.join(final_output_dir, base_name + '.zh.lrc')
+            if segment_lrcs_zh:
+                merge_lrc_files(segment_lrcs_zh, final_zh_lrc)
+            else:
+                make_lrc(output_json_path, final_zh_lrc)
+
+        if output_format == '双语LRC':
+            final_combine_lrc = os.path.join(final_output_dir, base_name + '.combine.lrc')
+            left = os.path.join(final_output_dir, base_name + '.orig.lrc')
+            right = os.path.join(final_output_dir, base_name + '.zh.lrc')
+            if os.path.exists(left) and os.path.exists(right):
+                merge_lrc_files([left, right], final_combine_lrc)
+
+        # 清理分段文件
+        for segment_file in segment_files:
+            # 清理音频文件
+            if os.path.exists(segment_file):
+                os.remove(segment_file)
+            # 清理SRT文件
+            segment_srt = segment_file[:-4] + '.srt'
+            if os.path.exists(segment_srt):
+                os.remove(segment_srt)
+            # 清理其他字幕文件
+            for ext in ['.zh.srt', '.lrc', '.orig.lrc', '.zh.lrc']:
+                f = segment_file[:-4] + ext
+                if os.path.exists(f):
+                    os.remove(f)
+
+        # 清理分段目录
+        if segment_files:
+            segment_dir = os.path.dirname(segment_files[0])
+            if os.path.exists(segment_dir):
+                shutil.rmtree(segment_dir)
+
+        return all_data
+
     @error_handler
     def run(self):
         self.save_config()
@@ -1764,6 +1999,8 @@ class MainWorker(QObject):
         output_format = self.master.output_format.currentText()
         output_dir = self.master.output_dir_edit.text().strip() or self.master.default_output_dir()
         use_input_dir = self.master.use_input_dir_checkbox.isChecked()
+        enable_segment = self.master.enable_segment_checkbox.isChecked()
+        segment_duration_minutes = self.master.segment_duration_spin.value() if enable_segment else 0
 
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
             f.write(param_whisper)
@@ -2020,58 +2257,128 @@ class MainWorker(QObject):
                     self.status.emit("[ERROR] 音频提取失败，请检查文件格式！")
                     break
 
-                self.status.emit("[INFO] 正在进行语音识别...")
-
-                if whisper_file.startswith('ggml'):
-                    print(param_whisper)
-                    whisper_proc, _ = start_named_proc(
-                        'whisper',
-                        [param.replace('$whisper_file',whisper_file).replace('$input_file',wav_file[:-4]).replace('$language',language) for param in param_whisper.split()]
-                    )
-                elif whisper_file.startswith('faster-whisper'):
-                    print(param_whisper_faster)
-                    whisper_proc, _ = start_named_proc(
-                        'whisper_faster',
-                        [param.replace('$whisper_file',whisper_file[15:]).replace('$input_file',wav_file[:-4]).replace('$language',language).replace('$output_dir',os.path.dirname(input_file)) for param in param_whisper_faster.split()]
-                    )
-                else:
-                    self.status.emit("[INFO] 不进行听写，跳过听写步骤...")
-                    continue
-                whisper_proc.wait()
-                if whisper_file.startswith('ggml'):
-                    stop_named_proc('whisper')
-                else:
-                    stop_named_proc('whisper_faster')
-
+                # 检查是否启用分段处理
                 base_path = wav_file[:-8]  # 去掉 .16k.wav
                 json_path = os.path.join(transcribed_dir, os.path.basename(base_path) + '.json')
-                make_prompt(wav_file[:-4] + '.srt', json_path)
 
-                # 生成原文 SRT/LRC 输出
-                if output_format == '原文SRT' or output_format == '双语SRT':
-                    srt_output = os.path.join(current_output_dir, os.path.basename(base_path + '.srt'))
-                    make_srt(json_path, srt_output)
+                total_duration = self._get_audio_duration(wav_file)
+                threshold_seconds = segment_duration_minutes * 60
 
-                if output_format == '原文LRC' or output_format == '双语LRC':
-                    lrc_name = os.path.basename(base_path + '.lrc')
-                    if output_format == '双语LRC':
-                        lrc_name = os.path.basename(base_path + '.orig.lrc')
-                    lrc_output = os.path.join(current_output_dir, lrc_name)
-                    make_lrc(json_path, lrc_output)
+                if enable_segment and segment_duration_minutes > 0 and total_duration > threshold_seconds:
+                    # 需要分段处理
+                    self.status.emit(f"[INFO] 音频时长 {total_duration:.2f} 秒超过阈值 {threshold_seconds} 秒，启用分段处理...")
 
-                # 清理临时文件
-                if os.path.exists(wav_file):
-                    os.remove(wav_file)
+                    segment_dir = os.path.join('project', 'cache', 'segments', os.path.basename(base_path))
+                    os.makedirs(segment_dir, exist_ok=True)
 
-                self.status.emit("[INFO] 语音识别完成！")
+                    # 切分音频
+                    segment_files, _ = self._split_audio(wav_file, segment_duration_minutes, segment_dir)
 
-                tf = TranscribedFile(
-                    base_path=base_path,
-                    json_src=json_path,
-                    output_dir=current_output_dir,
-                    output_format=output_format,
-                    orig_srt_path='',
-                )
+                    if not segment_files:
+                        self.status.emit("[ERROR] 音频切分失败")
+                        if os.path.exists(wav_file):
+                            os.remove(wav_file)
+                        break
+
+                    # 对每个片段进行听写和翻译
+                    segment_tfs = []  # 存储每个分段的 TranscribedFile
+                    for i, segment_file in enumerate(segment_files):
+                        if self.stop_event.is_set():
+                            break
+                        self.status.emit(f"[INFO] 正在处理第 {i+1}/{len(segment_files)} 个音频片段的听写...")
+
+                        segment_base = segment_file[:-4]
+                        segment_name = os.path.basename(segment_base)
+
+                        if whisper_file.startswith('ggml'):
+                            whisper_proc, _ = start_named_proc(
+                                'whisper',
+                                [param.replace('$whisper_file',whisper_file).replace('$input_file',segment_base).replace('$language',language) for param in param_whisper.split()]
+                            )
+                        elif whisper_file.startswith('faster-whisper'):
+                            whisper_proc, _ = start_named_proc(
+                                'whisper_faster',
+                                [param.replace('$whisper_file',whisper_file[15:]).replace('$input_file',segment_base).replace('$language',language).replace('$output_dir',segment_dir) for param in param_whisper_faster.split()]
+                            )
+                        else:
+                            break
+                        whisper_proc.wait()
+                        if whisper_file.startswith('ggml'):
+                            stop_named_proc('whisper')
+                        else:
+                            stop_named_proc('whisper_faster')
+
+                        # 转换该片段的SRT到JSON
+                        segment_json = os.path.join(transcribed_dir, segment_name + '.json')
+                        make_prompt(segment_base + '.srt', segment_json)
+
+                        # 立即提交该分段进行翻译
+                        if need_translate:
+                            self.status.emit(f"[INFO] 正在提交第 {i+1}/{len(segment_files)} 个片段进行翻译...")
+                            segment_tf = TranscribedFile(
+                                base_path=segment_base,
+                                json_src=segment_json,
+                                output_dir=segment_dir,  # 临时输出到分段目录
+                                output_format=output_format,
+                                orig_srt_path='',
+                            )
+                            self._translation_pool.submit(segment_tf)
+                            segment_tfs.append(segment_tf)
+
+                    # 等待所有分段翻译完成
+                    if need_translate and segment_tfs:
+                        self.status.emit("[INFO] 等待所有分段翻译完成...")
+                        self._translation_pool.done()
+                        self._translation_pool.wait_all(timeout=600)
+
+                        # 重新启动翻译池用于后续文件
+                        self._translation_pool = ConcurrentTranslationPool(
+                            project_dir='project',
+                            base_config_path='project/config.yaml',
+                            max_concurrent=max_concurrent,
+                            stop_event=self.stop_event,
+                            local_model_config=local_model_config,
+                        )
+                        self._translation_pool.start(engine, self.status.emit)
+
+                    # 合并所有片段的翻译结果
+                    self.status.emit("[INFO] 合并分段翻译结果...")
+                    self._merge_segment_translations(segment_files, segment_tfs, base_path, json_path, current_output_dir, output_format)
+
+                    self.status.emit("[INFO] 分段听写完成并合并！")
+
+                    # 分段处理已完成，跳过常规流程
+                    tf = None
+                else:
+                    # 正常流程（未启用分段）
+                    self.status.emit("[INFO] 正在进行语音识别...")
+                    self._process_single_audio(wav_file, whisper_file, language, param_whisper, param_whisper_faster, json_path, start_named_proc, stop_named_proc)
+
+                    # 生成原文 SRT/LRC 输出
+                    if output_format == '原文SRT' or output_format == '双语SRT':
+                        srt_output = os.path.join(current_output_dir, os.path.basename(base_path + '.srt'))
+                        make_srt(json_path, srt_output)
+
+                    if output_format == '原文LRC' or output_format == '双语LRC':
+                        lrc_name = os.path.basename(base_path + '.lrc')
+                        if output_format == '双语LRC':
+                            lrc_name = os.path.basename(base_path + '.orig.lrc')
+                        lrc_output = os.path.join(current_output_dir, lrc_name)
+                        make_lrc(json_path, lrc_output)
+
+                    # 清理临时文件
+                    if os.path.exists(wav_file):
+                        os.remove(wav_file)
+
+                    self.status.emit("[INFO] 语音识别完成！")
+
+                    tf = TranscribedFile(
+                        base_path=base_path,
+                        json_src=json_path,
+                        output_dir=current_output_dir,
+                        output_format=output_format,
+                        orig_srt_path='',
+                    )
 
             if tf is not None:
                 self._translation_pool.submit(tf)
