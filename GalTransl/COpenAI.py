@@ -3,6 +3,8 @@ CloseAI related classes
 """
 
 import asyncio
+import re
+import httpx
 from time import time
 from GalTransl import LOGGER, TRANSLATOR_DEFAULT_ENGINE
 from GalTransl.ConfigHelper import CProjectConfig, CProxy, build_httpx_sync_proxy_kwargs
@@ -10,8 +12,6 @@ from typing import Optional, Tuple
 from random import choice
 from asyncio import Queue
 from openai import OpenAI
-import re
-import httpx
 from GalTransl.TerminalOutput import should_print_translation_logs, terminal_progress
 
 

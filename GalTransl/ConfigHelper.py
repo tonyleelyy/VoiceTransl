@@ -316,6 +316,8 @@ def initDictList(config: dict, dictDir: str, projectDir: str) -> Optional[list[s
         if entry.startswith("(project_dir)"):
             entry = entry.replace("(project_dir)", "")
             result.append(str(path.abspath(projectDir) + sep + entry))
+        elif path.isabs(entry):
+            result.append(entry)
         else:
             result.append(str(path.abspath(dictDir) + sep + entry))
     return result

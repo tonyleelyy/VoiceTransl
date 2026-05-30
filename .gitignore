@@ -20,3 +20,7 @@ uvr/
 whisper-faster/whisper-faster.exe
 *.dll
 *.exe
+# Python venv
+.venv
+# Faster Whisper XXL
+_xxl_data
