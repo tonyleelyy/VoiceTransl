@@ -624,6 +624,7 @@ class MainWindow(QMainWindow):
                 max_concurrent = int(lines[14].strip()) if len(lines) > 14 else 1
                 enable_segment = (lines[15].strip().lower() == 'true') if len(lines) > 15 else False
                 segment_duration = int(lines[16].strip()) if len(lines) > 16 else 10
+                change_prompt_mode = lines[17].strip() if len(lines) > 17 else '不修改'
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
@@ -643,6 +644,8 @@ class MainWindow(QMainWindow):
                 self.max_concurrent_spin.setValue(max_concurrent)
                 self.enable_segment_checkbox.setChecked(enable_segment)
                 self.segment_duration_spin.setValue(segment_duration)
+                if hasattr(self, 'change_prompt_mode') and change_prompt_mode:
+                    self.change_prompt_mode.setCurrentText(change_prompt_mode)
 
         if not self.output_dir_edit.text().strip():
             self.output_dir_edit.setText(self.default_output_dir())
@@ -673,9 +676,29 @@ class MainWindow(QMainWindow):
             with open('project/dict_after.txt', 'r', encoding='utf-8') as f:
                 self.after_dict.setPlainText(f.read())
 
-        if os.path.exists('project/extra_prompt.txt'):
-            with open('project/extra_prompt.txt', 'r', encoding='utf-8') as f:
-                self.extra_prompt.setPlainText(f.read())
+        # Load extra_prompt and change_prompt_mode from config.yaml
+        try:
+            if os.path.exists('project/config.yaml'):
+                with open('project/config.yaml', 'r', encoding='utf-8') as f:
+                    cfg = yaml.safe_load(f) or {}
+                common_cfg = cfg.get('common', {})
+
+                # Load change_prompt mode
+                change_prompt_val = common_cfg.get('gpt.change_prompt', 'no')
+                mode_reverse_mapping = {
+                    'no': '不修改',
+                    'AdditionalPrompt': '追加',
+                    'OverwritePrompt': '覆盖'
+                }
+                if hasattr(self, 'change_prompt_mode'):
+                    self.change_prompt_mode.setCurrentText(mode_reverse_mapping.get(change_prompt_val, '不修改'))
+
+                # Load prompt_content
+                prompt_content = common_cfg.get('gpt.prompt_content', '')
+                if hasattr(self, 'extra_prompt') and prompt_content:
+                    self.extra_prompt.setPlainText(prompt_content)
+        except Exception:
+            pass
 
     def setup_timer(self):
         self.timer = QTimer(self)
@@ -1011,6 +1034,12 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.extra_prompt = QTextEdit()
         self.extra_prompt.setPlaceholderText("请在这里输入额外的提示信息，例如世界书或台本内容。")
         self.dict_layout.addWidget(self.extra_prompt)
+
+        self.dict_layout.addWidget(BodyLabel("📝 额外提示模式（选择如何处理额外提示）"))
+        self.change_prompt_mode = QComboBox()
+        self.change_prompt_mode.addItems(['不修改', '追加', '覆盖'])
+        self.change_prompt_mode.setCurrentText('不修改')
+        self.dict_layout.addWidget(self.change_prompt_mode)
 
         self.addSubInterface(self.dict_tab, FluentIcon.SETTING, "字典设置", NavigationItemPosition.TOP)
         
@@ -1429,10 +1458,11 @@ class MainWorker(QObject):
         os.makedirs(output_dir, exist_ok=True)
         enable_segment = self.master.enable_segment_checkbox.isChecked()
         segment_duration = self.master.segment_duration_spin.value()
+        change_prompt_mode = self.master.change_prompt_mode.currentText() if hasattr(self.master, 'change_prompt_mode') else '不修改'
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n{self.master.max_concurrent_spin.value()}\n{enable_segment}\n{segment_duration}\n")
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n{self.master.max_concurrent_spin.value()}\n{enable_segment}\n{segment_duration}\n{change_prompt_mode}\n")
 
         # save whisper param
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
@@ -1535,6 +1565,29 @@ class MainWorker(QObject):
             cfg['proxy']['proxies'] = [{'address': proxy_address}]
         else:
             cfg['proxy']['proxies'] = []
+
+        # Update extra prompt configuration (gpt.change_prompt and gpt.prompt_content)
+        extra_prompt = self.master.extra_prompt.toPlainText().strip() if hasattr(self.master, 'extra_prompt') else ''
+        change_prompt_mode = self.master.change_prompt_mode.currentText() if hasattr(self.master, 'change_prompt_mode') else '不修改'
+
+        # Map UI mode to config values
+        mode_mapping = {
+            '不修改': 'no',
+            '追加': 'AdditionalPrompt',
+            '覆盖': 'OverwritePrompt'
+        }
+
+        if 'common' not in cfg:
+            cfg['common'] = {}
+
+        cfg['common']['gpt.change_prompt'] = mode_mapping.get(change_prompt_mode, 'no')
+
+        if change_prompt_mode != '不修改' and extra_prompt:
+            cfg['common']['gpt.prompt_content'] = extra_prompt
+        elif change_prompt_mode == '不修改':
+            # If mode is 'no', clear the prompt_content to use default
+            if 'gpt.prompt_content' in cfg['common']:
+                del cfg['common']['gpt.prompt_content']
 
         try:
             with open('project/config.yaml', 'w', encoding='utf-8') as f:
@@ -2036,7 +2089,6 @@ class MainWorker(QObject):
         before_dict = self.master.before_dict.toPlainText()
         gpt_dict = self.master.gpt_dict.toPlainText()
         after_dict = self.master.after_dict.toPlainText()
-        extra_prompt = self.master.extra_prompt.toPlainText()
         param_whisper = self.master.param_whisper.toPlainText()
         param_whisper_faster = self.master.param_whisper_faster.toPlainText()
         param_llama = self.master.param_llama.toPlainText()
@@ -2080,12 +2132,6 @@ class MainWorker(QObject):
         else:
             if os.path.exists('project/dict_after.txt'):
                 os.remove('project/dict_after.txt')
-        if extra_prompt:
-            with open('project/extra_prompt.txt', 'w', encoding='utf-8') as f:
-                f.write(extra_prompt)
-        else:
-            if os.path.exists('project/extra_prompt.txt'):
-                os.remove('project/extra_prompt.txt')
 
         self.status.emit(f"[INFO] 当前输入：{input_files}")
 
