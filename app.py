@@ -37,32 +37,17 @@ from srt2prompt import make_prompt, merge_srt_files
 from GalTransl.ConfigHelper import CProjectConfig
 from GalTransl.Runner import run_galtransl
 
-def handle_special_api(base_url: str) -> str:
-    """
-    处理特殊API的URL转换。
-    针对某些需要特殊处理的API端点进行调整。
-    """
-    # Gemini API 使用不同的路径结构
-    if 'generativelanguage.googleapis.com' in base_url:
-        # Gemini API: /v1/models -> /v1/models
-        return base_url
-    # Ollama API: /v1/models -> /api/tags
-    if ':11434' in base_url or 'ollama' in base_url.lower():
-        return base_url.replace('/v1/models', '/api/tags')
-    # 默认情况直接返回
-    return base_url
-
 ONLINE_TRANSLATOR_MAPPING = {
     'Kimi': 'https://api.moonshot.cn',
     'Kimi (国际)': 'https://api.moonshot.ai',
-    'GLM': 'https://open.bigmodel.cn/api/paas',
-    'GLM (国际)': 'https://api.z.ai/api/paas',
+    'GLM': 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    'GLM (国际)': 'https://api.z.ai/api/paas/v4/chat/completions',
     'Deepseek': 'https://api.deepseek.com',
     'Minimax': 'https://api.minimaxi.com',
     'Minimax (国际)': 'https://api.minimaxi.io',
     '豆包': 'https://ark.cn-beijing.volces.com/api',
     '阿里云': 'https://dashscope.aliyuncs.com/compatible-mode',
-    'Gemini': 'https://generativelanguage.googleapis.com',
+    'Gemini': 'https://generativelanguage.googleapis.com/v1beta/openai',
     'OpenAI': 'https://api.openai.com',
     'Ollama': 'http://localhost:11434',
     "llamacpp（通用本地模型）": "http://localhost:8989",
@@ -1487,42 +1472,73 @@ class MainWorker(QObject):
 
         try:
             with open('project/config.yaml', 'r', encoding='utf-8') as f:
-                lines = f.readlines()
+                cfg = yaml.safe_load(f) or {}
         except Exception as e:
             self.status.emit(f"[ERROR] 无法读取配置文件 project/config.yaml：{e}")
             return
 
-        for idx, line in enumerate(lines):
-            if 'language:' in line:
-                lines[idx] = f'  language: "{language}2zh-cn"\n'
+        # Update language setting
+        if 'common' not in cfg:
+            cfg['common'] = {}
+        cfg['common']['language'] = f"{language}2zh-cn"
+
+        # Update backendSpecific configuration
+        if 'backendSpecific' not in cfg:
+            cfg['backendSpecific'] = {}
+
+        # Determine which backend to use
+        if 'sakura' in translator:
+            # Sakura LLM configuration
+            if 'SakuraLLM' not in cfg['backendSpecific']:
+                cfg['backendSpecific']['SakuraLLM'] = {}
+            sakura_cfg = cfg['backendSpecific']['SakuraLLM']
+            sakura_cfg['endpoints'] = ['http://127.0.0.1:8989']
+            sakura_cfg['rewriteModelName'] = sakura_file if sakura_file else ""
+        else:
+            # OpenAI-Compatible configuration
+            if 'OpenAI-Compatible' not in cfg['backendSpecific']:
+                cfg['backendSpecific']['OpenAI-Compatible'] = {}
+            openai_cfg = cfg['backendSpecific']['OpenAI-Compatible']
+
+            # Determine endpoint and model
             if 'custom' in translator:
-                if not gpt_address:
-                    gpt_address = 'https://api.openai.com'
-                if not gpt_model:
-                    gpt_model = ''
-                if 'GPT35:' in line:
-                    lines[idx+2] = f"      - token: {gpt_token}\n"
-                    lines[idx+4] = f"    defaultEndpoint: {gpt_address}\n"
-                    lines[idx+5] = f'    rewriteModelName: "{gpt_model}"\n'
-            for name, api in ONLINE_TRANSLATOR_MAPPING.items():
-                if name == translator:
-                    if 'llamacpp' in translator:
-                        gpt_model = sakura_file
-                    if 'GPT35:' in line:
-                        lines[idx+2] = f"      - token: {gpt_token}\n"
-                        lines[idx+4] = f"    defaultEndpoint: {api}\n"
-                        lines[idx+5] = f'    rewriteModelName: "{gpt_model}"\n'
-            if proxy_address:
-                if 'proxy:' in line:
-                    lines[idx+1] = f"  enableProxy: true\n"
-                    lines[idx+3] = f"    - address: {proxy_address}\n"
+                endpoint = gpt_address if gpt_address else 'https://api.openai.com'
+                model = gpt_model if gpt_model else ''
             else:
-                if 'proxy:' in line:
-                    lines[idx+1] = f"  enableProxy: false\n"
+                endpoint = ONLINE_TRANSLATOR_MAPPING.get(translator, 'https://api.openai.com')
+                model = gpt_model
+                if 'llamacpp' in translator:
+                    model = sakura_file
+
+            # Remove trailing /v1 or /v1/ from endpoint
+            endpoint = endpoint.rstrip('/')
+            if endpoint.endswith('/v1'):
+                endpoint = endpoint[:-3]
+
+            # Configure tokens
+            openai_cfg['tokens'] = [{
+                'token': gpt_token,
+                'endpoint': endpoint,
+                'modelName': model
+            }]
+            openai_cfg['tokenStrategy'] = "random"
+            openai_cfg['checkAvailable'] = True
+            openai_cfg['stream'] = True
+            openai_cfg['apiTimeout'] = 120
+            openai_cfg['apiErrorWait'] = "auto"
+
+        # Update proxy configuration
+        if 'proxy' not in cfg:
+            cfg['proxy'] = {}
+        cfg['proxy']['enableProxy'] = bool(proxy_address)
+        if proxy_address:
+            cfg['proxy']['proxies'] = [{'address': proxy_address}]
+        else:
+            cfg['proxy']['proxies'] = []
 
         try:
             with open('project/config.yaml', 'w', encoding='utf-8') as f:
-                f.writelines(lines)
+                yaml.dump(cfg, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
         except Exception as e:
             self.status.emit(f"[ERROR] 写入配置文件失败：{e}")
 
@@ -1549,7 +1565,6 @@ class MainWorker(QObject):
             return
 
         base_url = base_url.rstrip('/') + '/v1/models'
-        base_url = handle_special_api(base_url)
 
         self.status.emit(f"[INFO] 正在测试API，地址：{base_url} ...")
         try:
@@ -1626,11 +1641,11 @@ class MainWorker(QObject):
             return
 
         backend = (cfg or {}).get('backendSpecific', {})
-        gpt35 = backend.get('GPT35', {})
-        tokens = gpt35.get('tokens', []) or []
+        openai_cfg = backend.get('OpenAI-Compatible', {})
+        tokens = openai_cfg.get('tokens', []) or []
         token = tokens[0].get('token') if tokens else ''
-        address = gpt35.get('defaultEndpoint', '')
-        model = gpt35.get('rewriteModelName', '')
+        address = tokens[0].get('endpoint') if tokens else ''
+        model = tokens[0].get('modelName') if tokens else ''
 
         # 代理设置同步
         proxy_cfg = (cfg or {}).get('proxy', {})
