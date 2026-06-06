@@ -14,6 +14,7 @@ import json
 import yaml
 import threading
 import queue
+import multiprocessing
 from dataclasses import dataclass
 import requests
 import httpx
@@ -34,8 +35,6 @@ def open_path(path_value: str):
 
 from prompt2srt import make_srt, make_lrc, merge_lrc_files
 from srt2prompt import make_prompt, merge_srt_files
-from GalTransl.ConfigHelper import CProjectConfig
-from GalTransl.Runner import run_galtransl
 
 ONLINE_TRANSLATOR_MAPPING = {
     'Kimi': 'https://api.moonshot.cn',
@@ -75,12 +74,143 @@ class TranscribedFile:
 
 
 class ConcurrentTranslationPool:
-    """并发翻译线程池：每文件一个线程，工作空间隔离"""
+    """并发翻译进程池：每文件一个子进程，工作空间隔离"""
+
+    @staticmethod
+    def _translate_worker_process(task_queue, result_queue, status_queue, stop_event,
+                                   project_dir, base_config_path, engine, worker_idx):
+        """子进程工作函数：从队列取任务并执行翻译"""
+        while not stop_event.is_set():
+            try:
+                tf_dict = task_queue.get(timeout=1)
+            except:
+                continue
+
+            if tf_dict is None:  # 哨兵信号
+                result_queue.put(('done', worker_idx))
+                break
+
+            if stop_event.is_set():
+                result_queue.put(('stopped', worker_idx))
+                continue
+
+            # 执行翻译
+            try:
+                ConcurrentTranslationPool._translate_one_impl(
+                    tf_dict, worker_idx, project_dir, base_config_path, engine, status_queue)
+                result_queue.put(('success', worker_idx))
+            except Exception as e:
+                result_queue.put(('error', worker_idx, str(e)))
+
+    @staticmethod
+    def _translate_one_impl(tf_dict, worker_idx, project_dir, base_config_path,
+                            engine, status_queue):
+        """在子进程中执行单个文件的翻译"""
+        base_path = tf_dict['base_path']
+        json_src = tf_dict['json_src']
+        output_dir = tf_dict['output_dir']
+        output_format = tf_dict['output_format']
+        orig_srt_path = tf_dict['orig_srt_path']
+
+        base = os.path.basename(base_path)
+
+        def send_status(msg):
+            if status_queue is not None:
+                try:
+                    status_queue.put(msg, block=False)
+                except:
+                    pass
+
+        send_status(f"[INFO] [进程{worker_idx}] 开始翻译：{base}")
+
+        # 创建工作空间
+        workspace = ConcurrentTranslationPool._create_workspace_impl(project_dir, worker_idx)
+        json_name = os.path.basename(json_src)
+
+        # 将听写产出的 JSON 复制到工作空间的 gt_input
+        shutil.copy(json_src, os.path.join(workspace, 'gt_input', json_name))
+
+        # 准备独立配置文件
+        ConcurrentTranslationPool._prepare_config_impl(workspace, base_config_path, project_dir)
+
+        try:
+            send_status(f"[INFO] [进程{worker_idx}] 正在用 {engine} 翻译 {workspace}...")
+            result = subprocess.run(['translate/translate', workspace, engine],
+                                   check=True, capture_output=True, text=True, timeout=300)
+        except Exception as e:
+            send_status(f"[ERROR] [进程{worker_idx}] 翻译 {base} 失败: {e}")
+            raise
+
+        # 生成翻译后字幕
+        send_status(f"[INFO] [进程{worker_idx}] 正在生成字幕文件：{base}...")
+        ConcurrentTranslationPool._generate_output_impl(
+            json_src, base_path, output_dir, output_format, workspace)
+
+        send_status(f"[INFO] [进程{worker_idx}] 文件 {base} 翻译完成！")
+
+    @staticmethod
+    def _create_workspace_impl(project_dir, worker_idx):
+        """在子进程中创建工作空间"""
+        import time
+        idx = int(time.time() * 1000000) + worker_idx
+        workspace = os.path.join(project_dir, 'cache', f'translate_{idx}')
+        for sub in ('gt_input', 'gt_output', 'transl_cache'):
+            os.makedirs(os.path.join(workspace, sub), exist_ok=True)
+        return workspace
+
+    @staticmethod
+    def _prepare_config_impl(workspace, base_config_path, project_dir):
+        """在子进程中准备配置文件"""
+        with open(base_config_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        abs_project_dir = os.path.abspath(project_dir).replace('\\', '/')
+        content = content.replace('(project_dir)', abs_project_dir + '/')
+
+        config_path = os.path.join(workspace, 'config.yaml')
+        with open(config_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        return config_path
+
+    @staticmethod
+    def _generate_output_impl(json_src, base_path, output_dir, output_format, workspace):
+        """在子进程中生成输出文件"""
+        json_name = os.path.basename(json_src)
+        gt_output_json = os.path.join(workspace, 'gt_output', json_name)
+        base_name = os.path.basename(base_path)
+
+        if output_format in ('中文SRT', '双语SRT'):
+            zh_srt_output = os.path.join(output_dir, base_name + '.zh.srt')
+            make_srt(gt_output_json, zh_srt_output)
+
+        if output_format in ('中文LRC', '双语LRC'):
+            lrc_output = os.path.join(output_dir, base_name + '.lrc')
+            make_lrc(gt_output_json, lrc_output)
+
+        if output_format == '双语SRT':
+            left = os.path.join(output_dir, base_name + '.srt')
+            right = os.path.join(output_dir, base_name + '.zh.srt')
+            if os.path.exists(left) and os.path.exists(right):
+                merge_srt_files([left, right],
+                                os.path.join(output_dir, base_name + '.combine.srt'))
+
+        if output_format == '双语LRC':
+            left = os.path.join(output_dir, base_name + '.orig.lrc')
+            right = os.path.join(output_dir, base_name + '.zh.lrc')
+            if os.path.exists(left) and os.path.exists(right):
+                merge_lrc_files([left, right],
+                                os.path.join(output_dir, base_name + '.combine.lrc'))
+
+        if output_format not in ('双语SRT', '原文SRT'):
+            left = os.path.join(output_dir, base_name + '.srt')
+            if os.path.exists(left):
+                os.remove(left)
 
     def __init__(self, project_dir, base_config_path, max_concurrent, stop_event,
                  local_model_config=None):
         """
-        local_model_config: 本地模型配置，用于多线程本地模型翻译
+        local_model_config: 本地模型配置，用于多进程本地模型翻译
             {
                 'sakura_file': str,      # 模型文件路径
                 'sakura_mode': str,      # GPU层数
@@ -92,34 +222,55 @@ class ConcurrentTranslationPool:
         self._max_concurrent = max_concurrent
         self._stop_event = stop_event
         self._local_model_config = local_model_config
-        self._queue = queue.Queue()
-        self._workspace_counter = 0
-        self._counter_lock = threading.Lock()
-        self._active_threads: list[threading.Thread] = []
+        self._task_queue = multiprocessing.Queue()
+        self._result_queue = multiprocessing.Queue()
+        self._status_queue = multiprocessing.Queue()
+        self._active_processes: list[multiprocessing.Process] = []
         self._error_count = 0
         self._error_lock = threading.Lock()
-        # 本地模型相关（所有线程共享一个本地模型）
-        self._shared_local_model_proc = None  # 共享的本地模型进程
-        self._shared_local_model_port = None  # 共享的本地模型端口
+        # 本地模型相关（所有进程共享一个本地模型）
+        self._shared_local_model_proc = None
+        self._shared_local_model_port = None
         self._local_model_lock = threading.Lock()
-        # 串行模式相关（不启动线程，直接在主线程翻译）
+        # 串行模式相关
         self._serial_mode = max_concurrent <= 0
         self._serial_lock = threading.Lock()
+        # 状态回调
+        self._status_callback = None
+        self._engine = None
+        # 状态监听线程
+        self._status_thread = None
+        self._status_stop_event = threading.Event()
 
     @property
     def error_count(self):
         with self._error_lock:
             return self._error_count
 
+    def _status_listener(self):
+        """监听子进程状态消息的线程"""
+        while not self._status_stop_event.is_set():
+            try:
+                msg = self._status_queue.get(timeout=0.5)
+                if self._status_callback:
+                    self._status_callback(msg)
+            except:
+                continue
+
     def start(self, engine, status_callback):
-        """启动 N 个工作线程"""
+        """启动 N 个工作子进程"""
         self._engine = engine
         self._status_callback = status_callback
 
-        # 串行模式：不启动工作线程，直接返回
+        # 串行模式：不启动工作进程
         if self._serial_mode:
             return
-        
+
+        # 启动状态监听线程
+        self._status_stop_event.clear()
+        self._status_thread = threading.Thread(target=self._status_listener, daemon=True)
+        self._status_thread.start()
+
         # 如果配置了本地模型，启动一个共享的本地模型实例
         if self._local_model_config and self._local_model_config.get('sakura_file'):
             proc, port = self._start_local_model(0)
@@ -130,21 +281,30 @@ class ConcurrentTranslationPool:
             else:
                 status_callback("[ERROR] 共享本地模型启动失败")
 
-        # 并发模式：启动多个工作线程
+        # 创建多进程事件
+        self._mp_stop_event = multiprocessing.Event()
+
+        # 并发模式：启动多个工作子进程
         for i in range(self._max_concurrent):
-            t = threading.Thread(target=self._worker_loop, daemon=True, args=(i,))
-            self._active_threads.append(t)
-            t.start()
+            p = multiprocessing.Process(
+                target=ConcurrentTranslationPool._translate_worker_process,
+                args=(self._task_queue, self._result_queue, self._status_queue,
+                      self._mp_stop_event, self._project_dir, self._base_config_path,
+                      engine, i),
+                daemon=True
+            )
+            self._active_processes.append(p)
+            p.start()
 
     def submit(self, tf):
         """提交翻译任务"""
         if self._serial_mode:
-            # 串行模式：使用共享的本地模型（如果已启动）
+            # 串行模式
             with self._serial_lock:
                 if self._stop_event.is_set():
                     return
 
-                # 启动共享本地模型（如果配置了本地模型且尚未启动）
+                # 启动共享本地模型
                 if self._local_model_config and self._local_model_config.get('sakura_file'):
                     with self._local_model_lock:
                         if not self._shared_local_model_proc:
@@ -155,39 +315,92 @@ class ConcurrentTranslationPool:
                             else:
                                 self._status_callback("[ERROR] 共享本地模型启动失败")
 
-                # 执行翻译
-                self._translate_one(tf, 0)
+                # 执行翻译（在主线程中直接执行）
+                tf_dict = {
+                    'base_path': tf.base_path,
+                    'json_src': tf.json_src,
+                    'output_dir': tf.output_dir,
+                    'output_format': tf.output_format,
+                    'orig_srt_path': tf.orig_srt_path,
+                }
+                try:
+                    ConcurrentTranslationPool._translate_one_impl(
+                        tf_dict, 0, self._project_dir, self._base_config_path,
+                        self._engine, None)
+                except Exception as e:
+                    with self._error_lock:
+                        self._error_count += 1
+                    self._status_callback(f"[ERROR] 翻译失败: {e}")
 
-                # 停止共享本地模型（如果已启动）
+                # 停止共享本地模型
                 self._stop_shared_local_model()
         else:
             # 并发模式：放入队列
-            self._queue.put(tf)
+            tf_dict = {
+                'base_path': tf.base_path,
+                'json_src': tf.json_src,
+                'output_dir': tf.output_dir,
+                'output_format': tf.output_format,
+                'orig_srt_path': tf.orig_srt_path,
+            }
+            self._task_queue.put(tf_dict)
 
     def done(self):
         """所有任务已提交，发送哨兵信号"""
         if self._serial_mode:
-            return  # 串行模式不需要哨兵信号
+            return
         for _ in range(self._max_concurrent):
-            self._queue.put(None)
+            self._task_queue.put(None)
 
     def wait_all(self, timeout=600):
-        """等待所有工作线程结束"""
+        """等待所有工作子进程结束"""
         if self._serial_mode:
-            return  # 串行模式没有工作线程需要等待
-        for t in self._active_threads:
-            t.join(timeout=timeout)
+            return
 
-    def stop(self):
-        """停止所有工作线程：设置停止事件 + 清空待处理队列"""
-        self._stop_event.set()
-        # 清空队列中未处理的任务，让线程尽快退出
+        # 等待所有进程结束
+        for p in self._active_processes:
+            p.join(timeout=timeout / len(self._active_processes) if self._active_processes else timeout)
+
+        # 处理结果队列中的错误
         while True:
             try:
-                self._queue.get_nowait()
-                self._queue.task_done()
-            except queue.Empty:
+                result = self._result_queue.get_nowait()
+                if result[0] == 'error':
+                    with self._error_lock:
+                        self._error_count += 1
+            except:
                 break
+
+        # 停止状态监听线程
+        self._status_stop_event.set()
+        if self._status_thread:
+            self._status_thread.join(timeout=1)
+
+    def stop(self):
+        """停止所有工作子进程"""
+        # 设置停止事件
+        self._stop_event.set()
+        if hasattr(self, '_mp_stop_event'):
+            self._mp_stop_event.set()
+
+        # 清空任务队列
+        while True:
+            try:
+                self._task_queue.get_nowait()
+            except:
+                break
+
+        # 终止所有工作进程
+        for p in self._active_processes:
+            if p.is_alive():
+                p.terminate()
+                p.join(timeout=2)
+
+        # 停止状态监听线程
+        self._status_stop_event.set()
+        if self._status_thread:
+            self._status_thread.join(timeout=1)
+
         # 停止共享的本地模型进程
         self._stop_shared_local_model()
 
@@ -200,7 +413,8 @@ class ConcurrentTranslationPool:
         if proc:
             try:
                 if proc.poll() is None:
-                    self._status_callback("[INFO] 正在停止共享本地模型...")
+                    if self._status_callback:
+                        self._status_callback("[INFO] 正在停止共享本地模型...")
                     proc.terminate()
                     proc.wait(timeout=5)
             except Exception:
@@ -209,8 +423,8 @@ class ConcurrentTranslationPool:
                 except Exception:
                     pass
 
-    def _start_local_model(self, thread_idx):
-        """启动共享的本地模型服务（所有线程共用端口 8989）"""
+    def _start_local_model(self, worker_idx):
+        """启动共享的本地模型服务"""
         if not self._local_model_config:
             return None, None
 
@@ -222,23 +436,19 @@ class ConcurrentTranslationPool:
         if not sakura_file:
             return None, None
 
-        # 所有线程共享同一个端口 8989
         port = 8989
 
-        # 构建启动参数
         args = [param.replace('$model_file', sakura_file).replace('$num_layers', sakura_mode).replace('$port', str(port))
                 for param in param_llama.split()]
 
-        self._status_callback(f"[INFO] 正在启动共享本地模型，端口 {port}...")
+        if self._status_callback:
+            self._status_callback(f"[INFO] 正在启动共享本地模型，端口 {port}...")
 
         try:
             creationflags = 0x08000000 if os.name == 'nt' else 0
             proc = subprocess.Popen(args, stdout=sys.stdout, stderr=sys.stdout, creationflags=creationflags)
 
-            # 等待模型就绪
-            import requests
             expected_model = str(Path(sakura_file).name)
-            model_ready = False
             start_wait = time()
 
             while not self._stop_event.is_set():
@@ -257,8 +467,8 @@ class ConcurrentTranslationPool:
                         try:
                             body = chat_resp.json()
                             if isinstance(body, dict) and body.get("choices"):
-                                model_ready = True
-                                self._status_callback(f"[INFO] 共享本地模型已就绪，端口 {port}")
+                                if self._status_callback:
+                                    self._status_callback(f"[INFO] 共享本地模型已就绪，端口 {port}")
                                 break
                         except Exception:
                             pass
@@ -266,7 +476,8 @@ class ConcurrentTranslationPool:
                     pass
 
                 if time() - start_wait > 120:
-                    self._status_callback(f"[ERROR] 共享本地模型启动超时")
+                    if self._status_callback:
+                        self._status_callback(f"[ERROR] 共享本地模型启动超时")
                     try:
                         proc.terminate()
                         proc.wait(timeout=3)
@@ -277,126 +488,9 @@ class ConcurrentTranslationPool:
 
             return proc, port
         except Exception as e:
-            self._status_callback(f"[ERROR] 启动共享本地模型失败: {e}")
+            if self._status_callback:
+                self._status_callback(f"[ERROR] 启动共享本地模型失败: {e}")
             return None, None
-
-    def _worker_loop(self, thread_idx):
-        """工作线程主循环：从队列取任务 -> 翻译 -> 输出"""
-        # 使用共享的本地模型端口
-        local_port = self._shared_local_model_port
-
-        while not self._stop_event.is_set():
-            try:
-                tf = self._queue.get(timeout=1)
-            except queue.Empty:
-                continue
-
-            if tf is None:  # 哨兵信号
-                self._queue.task_done()
-                break
-
-            # 取出任务后再次检查停止信号，避免取消后仍启动新翻译
-            if self._stop_event.is_set():
-                self._queue.task_done()
-                continue
-
-            try:
-                self._translate_one(tf, thread_idx)
-            finally:
-                self._queue.task_done()
-
-    def _translate_one(self, tf, thread_idx):
-        """翻译单个文件：创建工作空间 -> 复制输入 -> 运行 GalTransl -> 生成输出"""
-        base = os.path.basename(tf.base_path)
-        self._status_callback(f"[INFO] [线程{thread_idx}] 开始翻译：{base}")
-
-        if self._stop_event.is_set():
-            return
-
-        workspace = self._create_workspace()
-        json_name = os.path.basename(tf.json_src)
-
-        # 将听写产出的 JSON 复制到工作空间的 gt_input
-        shutil.copy(tf.json_src, os.path.join(workspace, 'gt_input', json_name))
-
-        # 准备独立配置文件
-        self._prepare_config(workspace)
-
-        try:
-            cfg = CProjectConfig(workspace, 'config.yaml')
-            cfg.non_interactive = True
-            asyncio.run(run_galtransl(cfg, self._engine))
-        except Exception as e:
-            self._status_callback(f"[ERROR] [线程{thread_idx}] 翻译 {base} 失败: {e}")
-            with self._error_lock:
-                self._error_count += 1
-            return
-
-        # 生成翻译后字幕
-        self._status_callback(f"[INFO] [线程{thread_idx}] 正在生成字幕文件：{base}...")
-        self._generate_output(tf, workspace)
-
-        self._status_callback(f"[INFO] [线程{thread_idx}] 文件 {base} 翻译完成！")
-
-    def _create_workspace(self):
-        """分配独立工作空间目录 project/cache/translate_<N>/"""
-        with self._counter_lock:
-            idx = self._workspace_counter
-            self._workspace_counter += 1
-        workspace = os.path.join(self._project_dir, 'cache', f'translate_{idx}')
-        for sub in ('gt_input', 'gt_output', 'transl_cache'):
-            os.makedirs(os.path.join(workspace, sub), exist_ok=True)
-        return workspace
-
-    def _prepare_config(self, workspace):
-        """从主配置复制并调整路径，返回工作空间内 config.yaml 路径"""
-        with open(self._base_config_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # 将 (project_dir) 替换为主项目目录的绝对路径，保持字典引用正确
-        abs_project_dir = os.path.abspath(self._project_dir).replace('\\', '/')
-        content = content.replace('(project_dir)', abs_project_dir + '/')
-
-        config_path = os.path.join(workspace, 'config.yaml')
-        with open(config_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-
-        return config_path
-
-    def _generate_output(self, tf, workspace):
-        """从工作空间的 gt_output 生成字幕文件到实际输出目录"""
-        json_name = os.path.basename(tf.json_src)
-        gt_output_json = os.path.join(workspace, 'gt_output', json_name)
-        base_name = os.path.basename(tf.base_path)
-
-        if tf.output_format in ('中文SRT', '双语SRT'):
-            zh_srt_output = os.path.join(tf.output_dir, base_name + '.zh.srt')
-            make_srt(gt_output_json, zh_srt_output)
-
-        if tf.output_format in ('中文LRC', '双语LRC'):
-            lrc_output = os.path.join(tf.output_dir, base_name + '.lrc')
-            make_lrc(gt_output_json, lrc_output)
-
-        # 双语合并
-        if tf.output_format == '双语SRT':
-            left = os.path.join(tf.output_dir, base_name + '.srt')
-            right = os.path.join(tf.output_dir, base_name + '.zh.srt')
-            if os.path.exists(left) and os.path.exists(right):
-                merge_srt_files([left, right],
-                                os.path.join(tf.output_dir, base_name + '.combine.srt'))
-
-        if tf.output_format == '双语LRC':
-            left = os.path.join(tf.output_dir, base_name + '.orig.lrc')
-            right = os.path.join(tf.output_dir, base_name + '.zh.lrc')
-            if os.path.exists(left) and os.path.exists(right):
-                merge_lrc_files([left, right],
-                                os.path.join(tf.output_dir, base_name + '.combine.lrc'))
-                
-        # 清理临时文件
-        if tf.output_format not in ('双语SRT', '原文SRT'):
-            left = os.path.join(tf.output_dir, base_name + '.srt')
-            if os.path.exists(left):
-                os.remove(left)
 
 
 class Widget(QFrame):
@@ -564,7 +658,7 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, 'uvr_file'):
             current_uvr = self.uvr_file.currentText()
-            uvr_lst = [i for i in os.listdir('uvr') if i.endswith('onnx')]
+            uvr_lst = [i for i in os.listdir('separate') if i.endswith('onnx')]
             self.uvr_file.clear()
             self.uvr_file.addItems(uvr_lst)
             if current_uvr in uvr_lst:
@@ -1082,11 +1176,11 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         # UVR models move into speech settings for consistency
         self.settings_layout.addWidget(BodyLabel("🎤 选择用于伴奏分离的模型文件。"))
         self.uvr_file = QComboBox()
-        uvr_lst = [i for i in os.listdir('uvr') if i.endswith('onnx')]
+        uvr_lst = [i for i in os.listdir('separate') if i.endswith('onnx')]
         self.uvr_file.addItems(uvr_lst)
         self.settings_layout.addWidget(self.uvr_file)
         self.open_uvr_dir = QPushButton("📁 打开UVR模型目录")
-        self.open_uvr_dir.clicked.connect(lambda: open_path(os.path.join(os.getcwd(),'uvr')))
+        self.open_uvr_dir.clicked.connect(lambda: open_path(os.path.join(os.getcwd(),'separate')))
         self.settings_layout.addWidget(self.open_uvr_dir)
 
         self.addSubInterface(self.settings_tab, FluentIcon.SETTING, "语音模型", NavigationItemPosition.TOP)
@@ -1665,7 +1759,7 @@ class MainWorker(QObject):
                     self.finished.emit()
 
                 self.status.emit(f"[INFO] 正在进行伴奏分离...第{idx+1}个，共{len(input_files)}个")
-                proc = self._start_process(['uvr/separate', '-m', os.path.join('uvr',uvr_file), input_file])
+                proc = self._start_process(['separate/separate', '-m', os.path.join('separate',uvr_file), input_file])
                 proc.wait()
                 self._cleanup_process(proc)
 
@@ -1916,7 +2010,7 @@ class MainWorker(QObject):
             end_time = min((i + 1) * segment_duration, total_duration)
             duration = end_time - start_time
 
-            segment_file = os.path.join(output_dir, f"{base_name}_segment_{i:04d}.wav")
+            segment_file = os.path.join(output_dir, f"segment_{i:04d}.16k.wav")
 
             try:
                 proc = subprocess.run(
@@ -1933,7 +2027,7 @@ class MainWorker(QObject):
 
         return segment_files, total_duration
 
-    def _merge_segment_translations(self, segment_files, segment_tfs, original_base_path, output_json_path, final_output_dir, output_format):
+    def _merge_segment_translations(self, segment_files, segment_tfs, original_base_path, output_json_path, final_output_dir, output_format, duration):
         """合并多个分段的翻译结果，调整时间戳并生成最终字幕文件"""
         from prompt2srt import make_srt, make_lrc, merge_lrc_files
         from srt2prompt import merge_srt_files
@@ -1990,7 +2084,6 @@ class MainWorker(QObject):
                     segment_lrcs_zh.append(zh_lrc)
 
             # 更新时间偏移
-            duration = self._get_audio_duration(segment_file)
             if duration > 0:
                 time_offset += duration
 
@@ -2003,14 +2096,14 @@ class MainWorker(QObject):
         if output_format in ('原文SRT', '双语SRT'):
             final_srt = os.path.join(final_output_dir, base_name + '.srt')
             if segment_srts_orig:
-                merge_srt_files(segment_srts_orig, final_srt)
+                merge_srt_files(segment_srts_orig, final_srt, duration)
             else:
                 make_srt(output_json_path, final_srt)
 
         if output_format in ('中文SRT', '双语SRT'):
             final_zh_srt = os.path.join(final_output_dir, base_name + '.zh.srt')
             if segment_srts_zh:
-                merge_srt_files(segment_srts_zh, final_zh_srt)
+                merge_srt_files(segment_srts_zh, final_zh_srt, duration)
             else:
                 # 从 gt_output 合并
                 make_srt(output_json_path, final_zh_srt)
@@ -2027,14 +2120,14 @@ class MainWorker(QObject):
             if output_format == '双语LRC':
                 final_lrc = os.path.join(final_output_dir, base_name + '.orig.lrc')
             if segment_lrcs_orig:
-                merge_lrc_files(segment_lrcs_orig, final_lrc)
+                merge_lrc_files(segment_lrcs_orig, final_lrc, duration)
             else:
                 make_lrc(output_json_path, final_lrc)
 
         if output_format in ('中文LRC', '双语LRC'):
             final_zh_lrc = os.path.join(final_output_dir, base_name + '.zh.lrc')
             if segment_lrcs_zh:
-                merge_lrc_files(segment_lrcs_zh, final_zh_lrc)
+                merge_lrc_files(segment_lrcs_zh, final_zh_lrc, duration)
             else:
                 make_lrc(output_json_path, final_zh_lrc)
 
@@ -2044,27 +2137,6 @@ class MainWorker(QObject):
             right = os.path.join(final_output_dir, base_name + '.zh.lrc')
             if os.path.exists(left) and os.path.exists(right):
                 merge_lrc_files([left, right], final_combine_lrc)
-
-        # 清理分段文件
-        for segment_file in segment_files:
-            # 清理音频文件
-            if os.path.exists(segment_file):
-                os.remove(segment_file)
-            # 清理SRT文件
-            segment_srt = segment_file[:-8] + '.srt'
-            if os.path.exists(segment_srt):
-                os.remove(segment_srt)
-            # 清理其他字幕文件
-            for ext in ['.zh.srt', '.lrc', '.orig.lrc', '.zh.lrc']:
-                f = segment_file[:-8] + ext
-                if os.path.exists(f):
-                    os.remove(f)
-
-        # 清理分段目录
-        if segment_files:
-            segment_dir = os.path.dirname(segment_files[0])
-            if os.path.exists(segment_dir):
-                shutil.rmtree(segment_dir)
 
         return all_data
 
@@ -2321,15 +2393,17 @@ class MainWorker(QObject):
 
                     self.status.emit("[INFO] 语音识别完成！（使用已有字幕）")
 
-                    tf = TranscribedFile(
-                        base_path=base_path,
-                        json_src=json_path,
-                        output_dir=current_output_dir,
-                        output_format=output_format,
-                        orig_srt_path='',
-                    )
-                    self._translation_pool.submit(tf)
-                    continue
+                    if need_translate:
+                        self.status.emit("[INFO] 正在提交文件进行翻译...")
+                        tf = TranscribedFile(
+                            base_path=base_path,
+                            json_src=json_path,
+                            output_dir=current_output_dir,
+                            output_format=output_format,
+                            orig_srt_path='',
+                        )
+                        self._translation_pool.submit(tf)
+                        continue
 
                 self.status.emit("[INFO] 正在进行音频提取...")
                 ffmpeg_proc, _ = start_named_proc(
@@ -2417,19 +2491,9 @@ class MainWorker(QObject):
                         self._translation_pool.done()
                         self._translation_pool.wait_all(timeout=600)
 
-                        # 重新启动翻译池用于后续文件
-                        self._translation_pool = ConcurrentTranslationPool(
-                            project_dir='project',
-                            base_config_path='project/config.yaml',
-                            max_concurrent=max_concurrent,
-                            stop_event=self._stop_event,
-                            local_model_config=local_model_config,
-                        )
-                        self._translation_pool.start(engine, self.status.emit)
-
                     # 合并所有片段的翻译结果
                     self.status.emit("[INFO] 合并分段翻译结果...")
-                    self._merge_segment_translations(segment_files, segment_tfs, base_path, json_path, current_output_dir, output_format)
+                    self._merge_segment_translations(segment_files, segment_tfs, base_path, json_path, current_output_dir, output_format, threshold_seconds)
 
                     self.status.emit("[INFO] 分段听写完成并合并！")
 

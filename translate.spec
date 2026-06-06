@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['separate.py'],
+    ['translate.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -10,7 +10,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['PyQt-Fluent-Widgets','PyQt5'],
+    excludes=['torch', 'onnxruntime', 'PyQt-Fluent-Widgets','PyQt5'],
     noarchive=False,
     optimize=0,
 )
@@ -21,7 +21,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='separate',
+    name='translate',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -40,5 +40,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='separate',
+    name='translate',
 )
