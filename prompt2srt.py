@@ -33,11 +33,26 @@ def make_lrc(input_file, output_file):
         for i, d in enumerate(data):
             print("["+format_result_lrc(d["start"])+"] "+d["message"], file=f)
 
-def merge_lrc_files(input_files, output_file):
+def merge_lrc_files(input_files, output_file, duration=0):
     lines = []
+    offset = 0
     for input_file in input_files:
         with open(input_file, encoding='utf-8') as f:
-            lines.extend(f.readlines())
+            readlines = f.readlines()
+
+        if duration > 0:
+            for line in readlines:
+                if line.startswith('['):
+                    time_str = line.split(']')[0][1:]
+                    mm, ss_ms = time_str.split(':')
+                    ss, ms = ss_ms.split('.')
+                    total_seconds = int(mm) * 60 + int(ss) + int(ms) / 1000 + offset
+                    new_time_str = format_result_lrc(total_seconds)
+                    line = line.replace(time_str, new_time_str)
+                lines.append(line)
+            offset += duration
+        else:
+            lines.extend(readlines)
 
     # Sort lines by timestamp (string sort works for [mm:ss.xx])
     lines.sort()

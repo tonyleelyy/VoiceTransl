@@ -4,12 +4,24 @@ import json, argparse
 from datetime import timedelta
 import pysrt
 
-def merge_srt_files(input_files, output_file):
+def merge_srt_files(input_files, output_file, duration=0):
     merged_subs = pysrt.SubRipFile()
 
+    print(f"Merging {len(input_files)} SRT files with duration {duration} seconds...")
+
+    offset = 0
     for input_file in input_files:
         subs = pysrt.open(input_file)
+        subs.shift(seconds=offset)
+        offset += duration
         merged_subs.extend(subs)
+
+    # 按时间顺序重新排序
+    merged_subs.sort()
+    
+    # 重新编号（修复合并后序号错乱的问题）
+    for i, sub in enumerate(merged_subs, start=1):
+        sub.index = i
 
     merged_subs.save(output_file, encoding='utf-8')
 
