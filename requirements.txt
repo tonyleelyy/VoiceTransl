@@ -19,7 +19,7 @@ torch
 librosa
 onnx
 soundfile
-onnxruntime
+onnxruntime-directml
 opencc
 openai
 packaging
