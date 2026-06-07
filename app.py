@@ -1982,7 +1982,7 @@ class MainWorker(QObject):
         """获取音频文件时长（秒）"""
         try:
             result = subprocess.run(
-                ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                ['ffmpeg/ffprobe', '-v', 'error', '-show_entries', 'format=duration',
                  '-of', 'default=noprint_wrappers=1:nokey=1', audio_file],
                 capture_output=True, text=True, timeout=30
             )
