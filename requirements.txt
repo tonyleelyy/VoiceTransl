@@ -38,12 +38,4 @@ alive-progress
 vaporetto
 aiofiles
 httpx-aiohttp
-
-# Tokenizer
 budoux
-# Optional tokenizers
-# jieba
-# pkuseg
-# Very heavyweight tokenizer, manual installation recommended
-# numpy < 2.0.0
-# hanlp
