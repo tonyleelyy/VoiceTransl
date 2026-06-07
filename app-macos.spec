@@ -5,7 +5,7 @@ a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
-    datas=[('icon.png', '.'), ('llama', 'llama'), ('whisper', 'whisper'), ('project', 'project'), ('whisper-faster', 'whisper-faster'), ('uvr', 'uvr'), ('plugins', 'plugins'), ('ffmpeg', 'ffmpeg')],
+    datas=[('icon.png', '.'), ('llama', 'llama'), ('whisper', 'whisper'), ('project', 'project'), ('whisper-faster', 'whisper-faster'), ('separate', 'separate'), ('plugins', 'plugins'), ('ffmpeg', 'ffmpeg'), ('translate', 'translate')],
     hiddenimports=['tiktoken_ext.openai_public', 'tiktoken_ext'],
     hookspath=[],
     hooksconfig={},
