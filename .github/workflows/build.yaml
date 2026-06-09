@@ -14,8 +14,6 @@ jobs:
             name: App-windows
           - os: macos-latest
             name: App-macos
-          - os: ubuntu-latest
-            name: App-linux
     steps:
       - name: Create Executable
         uses: sayyid5416/pyinstaller@v1
