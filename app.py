@@ -14,7 +14,7 @@ import json
 import yaml
 import threading
 import queue
-import multiprocessing
+
 from dataclasses import dataclass
 import requests
 import httpx
@@ -74,16 +74,16 @@ class TranscribedFile:
 
 
 class ConcurrentTranslationPool:
-    """并发翻译进程池：每文件一个子进程，工作空间隔离"""
+    """并发翻译线程池：每文件一个工作线程，工作空间隔离"""
 
     @staticmethod
-    def _translate_worker_process(task_queue, result_queue, status_queue, stop_event,
-                                   project_dir, base_config_path, engine, worker_idx):
-        """子进程工作函数：从队列取任务并执行翻译"""
+    def _translate_worker_thread(task_queue, result_queue, status_queue, stop_event,
+                                 project_dir, base_config_path, engine, worker_idx):
+        """工作线程函数：从队列取任务并执行翻译"""
         while not stop_event.is_set():
             try:
                 tf_dict = task_queue.get(timeout=1)
-            except:
+            except queue.Empty:
                 continue
 
             if tf_dict is None:  # 哨兵信号
@@ -105,7 +105,7 @@ class ConcurrentTranslationPool:
     @staticmethod
     def _translate_one_impl(tf_dict, worker_idx, project_dir, base_config_path,
                             engine, status_queue):
-        """在子进程中执行单个文件的翻译"""
+        """在线程中执行单个文件的翻译"""
         base_path = tf_dict['base_path']
         json_src = tf_dict['json_src']
         output_dir = tf_dict['output_dir']
@@ -150,7 +150,7 @@ class ConcurrentTranslationPool:
 
     @staticmethod
     def _create_workspace_impl(project_dir, worker_idx):
-        """在子进程中创建工作空间"""
+        """在线程中创建工作空间"""
         import time
         idx = int(time.time() * 1000000) + worker_idx
         workspace = os.path.join(project_dir, 'cache', f'translate_{idx}')
@@ -160,7 +160,7 @@ class ConcurrentTranslationPool:
 
     @staticmethod
     def _prepare_config_impl(workspace, base_config_path, project_dir):
-        """在子进程中准备配置文件"""
+        """在线程中准备配置文件"""
         with open(base_config_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
@@ -175,7 +175,7 @@ class ConcurrentTranslationPool:
 
     @staticmethod
     def _generate_output_impl(json_src, base_path, output_dir, output_format, workspace):
-        """在子进程中生成输出文件"""
+        """在线程中生成输出文件"""
         json_name = os.path.basename(json_src)
         gt_output_json = os.path.join(workspace, 'gt_output', json_name)
         base_name = os.path.basename(base_path)
@@ -210,7 +210,7 @@ class ConcurrentTranslationPool:
     def __init__(self, project_dir, base_config_path, max_concurrent, stop_event,
                  local_model_config=None):
         """
-        local_model_config: 本地模型配置，用于多进程本地模型翻译
+        local_model_config: 本地模型配置，用于多线程本地模型翻译
             {
                 'sakura_file': str,      # 模型文件路径
                 'sakura_mode': str,      # GPU层数
@@ -222,10 +222,10 @@ class ConcurrentTranslationPool:
         self._max_concurrent = max_concurrent
         self._stop_event = stop_event
         self._local_model_config = local_model_config
-        self._task_queue = multiprocessing.Queue()
-        self._result_queue = multiprocessing.Queue()
-        self._status_queue = multiprocessing.Queue()
-        self._active_processes: list[multiprocessing.Process] = []
+        self._task_queue = queue.Queue()
+        self._result_queue = queue.Queue()
+        self._status_queue = queue.Queue()
+        self._active_threads: list[threading.Thread] = []
         self._error_count = 0
         self._error_lock = threading.Lock()
         # 本地模型相关（所有进程共享一个本地模型）
@@ -258,7 +258,7 @@ class ConcurrentTranslationPool:
                 continue
 
     def start(self, engine, status_callback):
-        """启动 N 个工作子进程"""
+        """启动 N 个工作线程"""
         self._engine = engine
         self._status_callback = status_callback
 
@@ -281,20 +281,20 @@ class ConcurrentTranslationPool:
             else:
                 status_callback("[ERROR] 共享本地模型启动失败")
 
-        # 创建多进程事件
-        self._mp_stop_event = multiprocessing.Event()
+        # 创建线程事件
+        self._thread_stop_event = threading.Event()
 
-        # 并发模式：启动多个工作子进程
+        # 并发模式：启动多个工作线程
         for i in range(self._max_concurrent):
-            p = multiprocessing.Process(
-                target=ConcurrentTranslationPool._translate_worker_process,
+            t = threading.Thread(
+                target=ConcurrentTranslationPool._translate_worker_thread,
                 args=(self._task_queue, self._result_queue, self._status_queue,
-                      self._mp_stop_event, self._project_dir, self._base_config_path,
+                      self._thread_stop_event, self._project_dir, self._base_config_path,
                       engine, i),
                 daemon=True
             )
-            self._active_processes.append(p)
-            p.start()
+            self._active_threads.append(t)
+            t.start()
 
     def submit(self, tf):
         """提交翻译任务"""
@@ -353,13 +353,13 @@ class ConcurrentTranslationPool:
             self._task_queue.put(None)
 
     def wait_all(self, timeout=600):
-        """等待所有工作子进程结束"""
+        """等待所有工作线程结束"""
         if self._serial_mode:
             return
 
-        # 等待所有进程结束
-        for p in self._active_processes:
-            p.join(timeout=timeout / len(self._active_processes) if self._active_processes else timeout)
+        # 等待所有线程结束
+        for t in self._active_threads:
+            t.join(timeout=timeout / len(self._active_threads) if self._active_threads else timeout)
 
         # 处理结果队列中的错误
         while True:
@@ -368,7 +368,7 @@ class ConcurrentTranslationPool:
                 if result[0] == 'error':
                     with self._error_lock:
                         self._error_count += 1
-            except:
+            except queue.Empty:
                 break
 
         # 停止状态监听线程
@@ -377,24 +377,22 @@ class ConcurrentTranslationPool:
             self._status_thread.join(timeout=1)
 
     def stop(self):
-        """停止所有工作子进程"""
+        """停止所有工作线程"""
         # 设置停止事件
         self._stop_event.set()
-        if hasattr(self, '_mp_stop_event'):
-            self._mp_stop_event.set()
+        if hasattr(self, '_thread_stop_event'):
+            self._thread_stop_event.set()
 
         # 清空任务队列
         while True:
             try:
                 self._task_queue.get_nowait()
-            except:
+            except queue.Empty:
                 break
 
-        # 终止所有工作进程
-        for p in self._active_processes:
-            if p.is_alive():
-                p.terminate()
-                p.join(timeout=2)
+        # 等待所有工作线程结束
+        for t in self._active_threads:
+            t.join(timeout=2)
 
         # 停止状态监听线程
         self._status_stop_event.set()
