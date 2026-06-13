@@ -1953,7 +1953,7 @@ class MainWorker(QObject):
 
     def _process_single_audio(self, wav_file, whisper_file, language, param_whisper, param_whisper_faster, json_path, start_named_proc, stop_named_proc):
         """处理单个音频文件的听写"""
-        base_path = wav_file[:-8]  # 去掉 .16k.wav
+        base_path = wav_file[:-4]  # 去掉 .wav
 
         if whisper_file.startswith('ggml'):
             print(param_whisper)
@@ -2290,7 +2290,7 @@ class MainWorker(QObject):
                     title = res['title'] if res['videos'] == 1 else res['pages'][0]['part']
                     title = re.sub(r'[.:?/\\]', ' ', title).strip()
                     title = re.sub(r'\s+', ' ', title)
-                    downloaded_file = os.path.abspath(f"{title}_{res['bvid']}.mp4")
+                    downloaded_file = os.path.abspath(f"{title}.mp4")
                     target_file = os.path.join(output_dir, os.path.basename(downloaded_file))
                     if os.path.exists(downloaded_file):
                         if os.path.exists(target_file):
@@ -2447,7 +2447,7 @@ class MainWorker(QObject):
                             break
                         self.status.emit(f"[INFO] 正在处理第 {i+1}/{len(segment_files)} 个音频片段的听写...")
 
-                        segment_base = segment_file[:-8] # 去掉 .16k.wav
+                        segment_base = segment_file[:-4] # 去掉 .wav
                         segment_name = os.path.basename(segment_base)
 
                         if whisper_file.startswith('ggml'):
