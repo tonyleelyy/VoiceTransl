@@ -4,7 +4,7 @@ os.chdir(sys._MEIPASS) if hasattr(sys, '_MEIPASS') else os.chdir(os.path.dirname
 import shutil
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime, QSize
-from PyQt5.QtWidgets import QApplication, QVBoxLayout, QFileDialog, QFrame, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QCheckBox
+from PyQt5.QtWidgets import QApplication, QVBoxLayout, QFileDialog, QFrame, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QCheckBox, QDialog, QLabel
 from qfluentwidgets import PushButton as QPushButton, TextEdit as QTextEdit, LineEdit as QLineEdit, ComboBox as QComboBox, Slider as QSlider, FluentWindow as QMainWindow, PlainTextEdit as QPlainTextEdit, SplashScreen, SpinBox as QSpinBox
 from qfluentwidgets import FluentIcon, NavigationItemPosition, SubtitleLabel, TitleLabel, BodyLabel
 
@@ -1444,11 +1444,40 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.thread.start()
         self.switchTo(self.log_tab)
 
+    def show_model_selection_dialog(self, models):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("选择模型")
+        dialog.setMinimumWidth(400)
+        layout = QVBoxLayout(dialog)
+
+        label = QLabel("请选择要使用的模型：")
+        layout.addWidget(label)
+
+        combo = QComboBox()
+        combo.addItems(models)
+        layout.addWidget(combo)
+
+        btn_layout = QHBoxLayout()
+        ok_btn = QPushButton("确定")
+        cancel_btn = QPushButton("取消")
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        ok_btn.clicked.connect(lambda: (
+            self.gpt_model.setText(combo.currentText()),
+            dialog.accept()
+        ))
+        cancel_btn.clicked.connect(dialog.reject)
+
+        dialog.exec_()
+
     def run_test_online_api(self):
         self.thread = QThread()
         self.worker = MainWorker(self)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.test_online_api)
+        self.worker.show_model_dialog.connect(self.show_model_selection_dialog)
         self.worker.finished.connect(self.thread.quit)
         self.thread.start()
         self.switchTo(self.log_tab)
@@ -1479,6 +1508,7 @@ def error_handler(func):
     return wrapper
 class MainWorker(QObject):
     finished = pyqtSignal()
+    show_model_dialog = pyqtSignal(list)
 
     def __init__(self, master):
         super().__init__()
@@ -1726,12 +1756,28 @@ class MainWorker(QObject):
             resp = requests.get(base_url, headers=headers, timeout=20)
             resp.raise_for_status()
 
+            models = []
+            parse_error = False
             try:
-                body = resp.text[:500].replace('\n', ' ')
+                data = resp.json()
+                if isinstance(data, dict) and 'data' in data:
+                    for item in data['data']:
+                        if isinstance(item, dict) and 'id' in item:
+                            models.append(item['id'])
+                if models:
+                    self.show_model_dialog.emit(models)
+                    self.status.emit(f"[INFO] API测试完成，发现 {len(models)} 个模型")
+                else:
+                    parse_error = True
             except Exception:
-                body = str(resp)[:500].replace('\n', ' ')
+                parse_error = True
 
-            self.status.emit(f"[INFO] API测试完成，地址：{base_url}，响应：{body}")
+            if parse_error:
+                try:
+                    body = resp.text[:500].replace('\n', ' ')
+                except Exception:
+                    body = str(resp)[:500].replace('\n', ' ')
+                self.status.emit(f"[INFO] API测试完成，地址：{base_url}，响应：{body}")
         except Exception as e:
             self.status.emit(f"[ERROR] API测试失败：{e}")
 
