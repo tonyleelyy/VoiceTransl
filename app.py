@@ -2075,6 +2075,7 @@ class MainWorker(QObject):
         """合并多个分段的翻译结果，调整时间戳并生成最终字幕文件"""
         from prompt2srt import make_srt, make_lrc, merge_lrc_files
         from srt2prompt import merge_srt_files
+        import glob as glob_module
 
         all_data = []
         time_offset = 0
@@ -2086,14 +2087,17 @@ class MainWorker(QObject):
         base_name = os.path.basename(original_base_path)
 
         for i, segment_file in enumerate(segment_files):
-            segment_name = os.path.basename(segment_file[:-8])  # 去掉 .16k.wav
+            segment_name = os.path.basename(segment_file[:-4])  # 去掉 .wav，保留 .16k
             segment_dir = os.path.dirname(segment_file)
 
-            # 确定使用哪个 JSON：如果有翻译后的 gt_output 则用它，否则用 transcribed
-            translated_json = os.path.join('project', 'cache', f'translate_{i}', 'gt_output', segment_name + '.json')
+            # 确定使用哪个 JSON：扫描实际的工作空间目录找翻译后的 gt_output
+            translated_json_candidates = glob_module.glob(
+                os.path.join('project', 'cache', 'translate_*', 'gt_output', segment_name + '.json')
+            )
+            translated_json = translated_json_candidates[0] if translated_json_candidates else None
             transcribed_json = os.path.join('project', 'cache', 'transcribed', segment_name + '.json')
 
-            json_path = translated_json if os.path.exists(translated_json) else transcribed_json
+            json_path = translated_json if translated_json and os.path.exists(translated_json) else transcribed_json
 
             if os.path.exists(json_path):
                 try:
