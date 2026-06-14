@@ -2090,26 +2090,6 @@ class MainWorker(QObject):
             segment_name = os.path.basename(segment_file[:-4])  # 去掉 .wav，保留 .16k
             segment_dir = os.path.dirname(segment_file)
 
-            # 确定使用哪个 JSON：扫描实际的工作空间目录找翻译后的 gt_output
-            translated_json_candidates = glob_module.glob(
-                os.path.join('project', 'cache', 'translate_*', 'gt_output', segment_name + '.json')
-            )
-            translated_json = translated_json_candidates[0] if translated_json_candidates else None
-            transcribed_json = os.path.join('project', 'cache', 'transcribed', segment_name + '.json')
-
-            json_path = translated_json if translated_json and os.path.exists(translated_json) else transcribed_json
-
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    for entry in data:
-                        entry['start'] += time_offset
-                        entry['end'] += time_offset
-                        all_data.append(entry)
-                except Exception as e:
-                    self.status.emit(f"[WARN] 读取片段JSON失败: {e}")
-
             # 收集分段的字幕文件（用于双语合并）
             if output_format in ('原文SRT', '双语SRT'):
                 orig_srt = os.path.join(segment_dir, segment_name + '.srt')
@@ -2131,30 +2111,14 @@ class MainWorker(QObject):
                 if os.path.exists(zh_lrc):
                     segment_lrcs_zh.append(zh_lrc)
 
-            # 更新时间偏移
-            if duration > 0:
-                time_offset += duration
-
-        # 保存合并后的JSON到 transcribed 目录
-        os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
-        with open(output_json_path, 'w', encoding='utf-8') as f:
-            json.dump(all_data, f, ensure_ascii=False, indent=4)
-
         # 生成最终的合并字幕文件
         if output_format in ('原文SRT', '双语SRT'):
             final_srt = os.path.join(final_output_dir, base_name + '.srt')
-            if segment_srts_orig:
-                merge_srt_files(segment_srts_orig, final_srt, duration)
-            else:
-                make_srt(output_json_path, final_srt)
+            merge_srt_files(segment_srts_orig, final_srt, duration)
 
         if output_format in ('中文SRT', '双语SRT'):
             final_zh_srt = os.path.join(final_output_dir, base_name + '.zh.srt')
-            if segment_srts_zh:
-                merge_srt_files(segment_srts_zh, final_zh_srt, duration)
-            else:
-                # 从 gt_output 合并
-                make_srt(output_json_path, final_zh_srt)
+            merge_srt_files(segment_srts_zh, final_zh_srt, duration)
 
         if output_format == '双语SRT':
             final_combine_srt = os.path.join(final_output_dir, base_name + '.combine.srt')
@@ -2167,17 +2131,11 @@ class MainWorker(QObject):
             final_lrc = os.path.join(final_output_dir, base_name + '.lrc')
             if output_format == '双语LRC':
                 final_lrc = os.path.join(final_output_dir, base_name + '.orig.lrc')
-            if segment_lrcs_orig:
-                merge_lrc_files(segment_lrcs_orig, final_lrc, duration)
-            else:
-                make_lrc(output_json_path, final_lrc)
+            merge_lrc_files(segment_lrcs_orig, final_lrc, duration)
 
         if output_format in ('中文LRC', '双语LRC'):
             final_zh_lrc = os.path.join(final_output_dir, base_name + '.zh.lrc')
-            if segment_lrcs_zh:
-                merge_lrc_files(segment_lrcs_zh, final_zh_lrc, duration)
-            else:
-                make_lrc(output_json_path, final_zh_lrc)
+            merge_lrc_files(segment_lrcs_zh, final_zh_lrc, duration)
 
         if output_format == '双语LRC':
             final_combine_lrc = os.path.join(final_output_dir, base_name + '.combine.lrc')
