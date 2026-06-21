@@ -1697,6 +1697,14 @@ class MainWorker(QObject):
         try:
             with open('project/config.yaml', 'r', encoding='utf-8') as f:
                 cfg = yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            # 首次运行：从默认模板初始化配置文件
+            from GalTransl.DefaultProjectConfig import DEFAULT_PROJECT_CONFIG_YAML
+            self.status.emit("[INFO] 首次运行，正在初始化项目配置文件...")
+            os.makedirs('project', exist_ok=True)
+            cfg = yaml.safe_load(DEFAULT_PROJECT_CONFIG_YAML) or {}
+            with open('project/config.yaml', 'w', encoding='utf-8') as f:
+                yaml.dump(cfg, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
         except Exception as e:
             self.status.emit(f"[ERROR] 无法读取配置文件 project/config.yaml：{e}")
             return
