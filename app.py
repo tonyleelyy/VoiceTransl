@@ -506,6 +506,25 @@ class Widget(QFrame):
         # Must set a globally unique object name for the sub-interface
         self.setObjectName(text.replace(' ', '-'))
 
+# .env API Key 读写辅助函数
+def _load_api_key() -> str:
+    """从项目根目录 .env 文件中读取 API Key"""
+    if not os.path.exists('.env'):
+        return ''
+    with open('.env', 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('VOICETRANSL_API_KEY='):
+                return line.split('=', 1)[1].strip()
+    return ''
+
+
+def _save_api_key(api_key: str) -> None:
+    """将 API Key 写入项目根目录 .env 文件"""
+    with open('.env', 'w', encoding='utf-8') as f:
+        f.write(f'VOICETRANSL_API_KEY={api_key}\n')
+
+
 class MainWindow(QMainWindow):
     status = pyqtSignal(str)
 
@@ -695,50 +714,81 @@ class MainWindow(QMainWindow):
 
         self.status.emit("[INFO] 取消任务完成。")
 
-    def load_config(self):
-        # load config
-        if os.path.exists('config.txt'):
-            with open('config.txt', 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-                whisper_file = lines[0].strip()
-                translator = lines[1].strip()
-                language = lines[2].strip()
-                gpt_token = lines[3].strip()
-                gpt_address = lines[4].strip()
-                gpt_model = lines[5].strip()
-                sakura_file = lines[6].strip()
-                sakura_mode = lines[7].strip()
-                proxy_address = lines[8].strip()
-                uvr_file = lines[9].strip()
-                output_format = lines[10].strip()
-                subtitle_font = lines[11].strip() if len(lines) > 11 else ""
-                output_dir = lines[12].strip() if len(lines) > 12 else self.default_output_dir()
-                use_input_dir = (lines[13].strip().lower() == 'true') if len(lines) > 13 else False
-                max_concurrent = int(lines[14].strip()) if len(lines) > 14 else 1
-                enable_segment = (lines[15].strip().lower() == 'true') if len(lines) > 15 else False
-                segment_duration = int(lines[16].strip()) if len(lines) > 16 else 10
-                change_prompt_mode = lines[17].strip() if len(lines) > 17 else '不修改'
+    def _migrate_config_txt(self):
+        """从旧 config.txt 迁移到 gui_settings.yaml + .env，返回 gui_settings 字典"""
+        with open('config.txt', 'r', encoding='utf-8') as f:
+            lines = f.readlines()
 
-                if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
-                self.translator_group.setCurrentText(translator)
-                self.input_lang.setCurrentText(language)
-                self.gpt_token.setText(gpt_token)
-                self.gpt_address.setText(gpt_address)
-                self.gpt_model.setText(gpt_model)
-                if self.sakura_file: self.sakura_file.setCurrentText(sakura_file)
-                self.sakura_mode.setText(sakura_mode)
-                self.proxy_address.setText(proxy_address)
-                if self.uvr_file: self.uvr_file.setCurrentText(uvr_file)
-                self.output_format.setCurrentText(output_format)
-                if subtitle_font:
-                    self.subtitle_font_combo.setCurrentText(subtitle_font)
+        gpt_token = lines[3].strip() if len(lines) > 3 else ''
+        _save_api_key(gpt_token)
+
+        gui_settings = {
+            'whisper_file': lines[0].strip(),
+            'translator': lines[1].strip(),
+            'language': lines[2].strip(),
+            'gpt_address': lines[4].strip(),
+            'gpt_model': lines[5].strip(),
+            'sakura_file': lines[6].strip(),
+            'sakura_mode': lines[7].strip(),
+            'proxy_address': lines[8].strip(),
+            'uvr_file': lines[9].strip(),
+            'output_format': lines[10].strip(),
+            'subtitle_font': lines[11].strip() if len(lines) > 11 else "",
+            'output_dir': lines[12].strip() if len(lines) > 12 else self.default_output_dir(),
+            'use_input_dir': (lines[13].strip().lower() == 'true') if len(lines) > 13 else False,
+            'max_concurrent': int(lines[14].strip()) if len(lines) > 14 else 1,
+            'enable_segment': (lines[15].strip().lower() == 'true') if len(lines) > 15 else False,
+            'segment_duration': int(lines[16].strip()) if len(lines) > 16 else 10,
+            'change_prompt_mode': lines[17].strip() if len(lines) > 17 else '不修改',
+        }
+
+        with open('gui_settings.yaml', 'w', encoding='utf-8') as f:
+            yaml.dump(gui_settings, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+
+        return gui_settings
+
+    def load_config(self):
+        """加载 GUI 配置（优先 gui_settings.yaml，兼容旧 config.txt 自动迁移）"""
+        gui_settings = {}
+
+        if os.path.exists('gui_settings.yaml'):
+            with open('gui_settings.yaml', 'r', encoding='utf-8') as f:
+                gui_settings = yaml.safe_load(f) or {}
+        elif os.path.exists('config.txt'):
+            gui_settings = self._migrate_config_txt()
+
+        if gui_settings:
+            if self.whisper_file and gui_settings.get('whisper_file'):
+                self.whisper_file.setCurrentText(gui_settings['whisper_file'])
+            self.translator_group.setCurrentText(gui_settings.get('translator', ''))
+            self.input_lang.setCurrentText(gui_settings.get('language', ''))
+            self.gpt_address.setText(gui_settings.get('gpt_address', ''))
+            self.gpt_model.setText(gui_settings.get('gpt_model', ''))
+            if self.sakura_file:
+                self.sakura_file.setCurrentText(gui_settings.get('sakura_file', ''))
+            self.sakura_mode.setText(gui_settings.get('sakura_mode', ''))
+            self.proxy_address.setText(gui_settings.get('proxy_address', ''))
+            if self.uvr_file:
+                self.uvr_file.setCurrentText(gui_settings.get('uvr_file', ''))
+            self.output_format.setCurrentText(gui_settings.get('output_format', ''))
+            subtitle_font = gui_settings.get('subtitle_font', '')
+            if subtitle_font:
+                self.subtitle_font_combo.setCurrentText(subtitle_font)
+            output_dir = gui_settings.get('output_dir', '')
+            if output_dir:
                 self.output_dir_edit.setText(output_dir)
-                self.use_input_dir_checkbox.setChecked(use_input_dir)
-                self.max_concurrent_spin.setValue(max_concurrent)
-                self.enable_segment_checkbox.setChecked(enable_segment)
-                self.segment_duration_spin.setValue(segment_duration)
-                if hasattr(self, 'change_prompt_mode') and change_prompt_mode:
-                    self.change_prompt_mode.setCurrentText(change_prompt_mode)
+            self.use_input_dir_checkbox.setChecked(gui_settings.get('use_input_dir', False))
+            self.max_concurrent_spin.setValue(gui_settings.get('max_concurrent', 1))
+            self.enable_segment_checkbox.setChecked(gui_settings.get('enable_segment', False))
+            self.segment_duration_spin.setValue(gui_settings.get('segment_duration', 10))
+            change_prompt_mode = gui_settings.get('change_prompt_mode', '')
+            if hasattr(self, 'change_prompt_mode') and change_prompt_mode:
+                self.change_prompt_mode.setCurrentText(change_prompt_mode)
+
+        # API Key 始终从 .env 加载
+        api_key = _load_api_key()
+        if api_key:
+            self.gpt_token.setText(api_key)
 
         if not self.output_dir_edit.text().strip():
             self.output_dir_edit.setText(self.default_output_dir())
@@ -769,14 +819,13 @@ class MainWindow(QMainWindow):
             with open('project/dict_after.txt', 'r', encoding='utf-8') as f:
                 self.after_dict.setPlainText(f.read())
 
-        # Load extra_prompt and change_prompt_mode from config.yaml
+        # 从 config.yaml 加载 prompt 设置
         try:
             if os.path.exists('project/config.yaml'):
                 with open('project/config.yaml', 'r', encoding='utf-8') as f:
                     cfg = yaml.safe_load(f) or {}
                 common_cfg = cfg.get('common', {})
 
-                # Load change_prompt mode
                 change_prompt_val = common_cfg.get('gpt.change_prompt', 'no')
                 mode_reverse_mapping = {
                     'no': '不修改',
@@ -784,9 +833,9 @@ class MainWindow(QMainWindow):
                     'OverwritePrompt': '覆盖'
                 }
                 if hasattr(self, 'change_prompt_mode'):
-                    self.change_prompt_mode.setCurrentText(mode_reverse_mapping.get(change_prompt_val, '不修改'))
+                    self.change_prompt_mode.setCurrentText(
+                        mode_reverse_mapping.get(change_prompt_val, '不修改'))
 
-                # Load prompt_content
                 prompt_content = common_cfg.get('gpt.prompt_content', '')
                 if hasattr(self, 'extra_prompt') and prompt_content:
                     self.extra_prompt.setPlainText(prompt_content)
@@ -1583,9 +1632,31 @@ class MainWorker(QObject):
         segment_duration = self.master.segment_duration_spin.value()
         change_prompt_mode = self.master.change_prompt_mode.currentText() if hasattr(self.master, 'change_prompt_mode') else '不修改'
 
-        # save config
-        with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n{self.master.max_concurrent_spin.value()}\n{enable_segment}\n{segment_duration}\n{change_prompt_mode}\n")
+        # save GUI settings to YAML（不包含 API Key）
+        gui_settings = {
+            'whisper_file': whisper_file,
+            'translator': translator,
+            'language': language,
+            'gpt_address': gpt_address,
+            'gpt_model': gpt_model,
+            'sakura_file': sakura_file,
+            'sakura_mode': sakura_mode,
+            'proxy_address': proxy_address,
+            'uvr_file': uvr_file,
+            'output_format': output_format,
+            'subtitle_font': subtitle_font,
+            'output_dir': output_dir,
+            'use_input_dir': use_input_dir,
+            'max_concurrent': self.master.max_concurrent_spin.value(),
+            'enable_segment': enable_segment,
+            'segment_duration': segment_duration,
+            'change_prompt_mode': change_prompt_mode,
+        }
+        with open('gui_settings.yaml', 'w', encoding='utf-8') as f:
+            yaml.dump(gui_settings, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+
+        # save API Key 到 .env
+        _save_api_key(gpt_token)
 
         # save whisper param
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
@@ -1614,7 +1685,7 @@ class MainWorker(QObject):
         self.status.emit("[INFO] 正在进行翻译配置...")
         translator = self.master.translator_group.currentText()
         language = self.master.input_lang.currentText()
-        gpt_token = self.master.gpt_token.text()
+        gpt_token = self.master.gpt_token.text() or _load_api_key()
         gpt_address = self.master.gpt_address.text()
         gpt_model = self.master.gpt_model.text()
         sakura_file = self.master.sakura_file.currentText()
@@ -1724,7 +1795,7 @@ class MainWorker(QObject):
         self._stop_event.clear()
         self.save_config()
         translator = self.master.translator_group.currentText()
-        gpt_token = self.master.gpt_token.text()
+        gpt_token = self.master.gpt_token.text() or _load_api_key()
         gpt_address = self.master.gpt_address.text()
         gpt_model = self.master.gpt_model.text()
         proxy_address = self.master.proxy_address.text()

@@ -4,6 +4,8 @@ desktop/
 *.bin
 log.txt
 config.txt
+.env
+gui_settings.yaml
 # VSCode
 .vscode
 useful_tools/GalTransl_DumpInjector/config.ini
@@ -24,5 +26,6 @@ whisper-faster/whisper-faster.exe
 .venv
 # Faster Whisper XXL
 _xxl_data
+project/config.yaml
 # Tests
 Tests
