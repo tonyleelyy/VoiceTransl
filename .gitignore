@@ -25,3 +25,5 @@ whisper-faster/whisper-faster.exe
 .venv
 # Faster Whisper XXL
 _xxl_data
+# Tests
+Tests

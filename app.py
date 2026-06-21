@@ -1,6 +1,10 @@
 import sys, os
 
-os.chdir(sys._MEIPASS) if hasattr(sys, '_MEIPASS') else os.chdir(os.path.dirname(os.path.abspath(__file__)))
+_FROZEN = hasattr(sys, '_MEIPASS')
+os.chdir(sys._MEIPASS) if _FROZEN else os.chdir(os.path.dirname(os.path.abspath(__file__)))
+# PyInstaller 打包后使用独立 exe，源码运行时使用 python 脚本
+_TRANSLATE_CMD = ['translate/translate'] if _FROZEN else [sys.executable, 'translate.py']
+_SEPARATE_CMD = ['separate/separate'] if _FROZEN else [sys.executable, 'separate.py']
 import shutil
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime, QSize
@@ -136,7 +140,7 @@ class ConcurrentTranslationPool:
         try:
             send_status(f"[INFO] [进程{worker_idx}] 正在用 {engine} 翻译 {workspace}...")
             creationflags = 0x08000000 if os.name == 'nt' else 0
-            result = subprocess.run(['translate/translate', workspace, engine],
+            result = subprocess.run([*_TRANSLATE_CMD, workspace, engine],
                                    check=True, capture_output=True, text=True, timeout=300, creationflags=creationflags)
         except Exception as e:
             send_status(f"[ERROR] [进程{worker_idx}] 翻译 {base} 失败: {e}")
@@ -1804,7 +1808,7 @@ class MainWorker(QObject):
                     self.finished.emit()
 
                 self.status.emit(f"[INFO] 正在进行伴奏分离...第{idx+1}个，共{len(input_files)}个")
-                proc = self._start_process(['separate/separate', '-m', os.path.join('separate',uvr_file), input_file])
+                proc = self._start_process([*_SEPARATE_CMD, '-m', os.path.join('separate',uvr_file), input_file])
                 proc.wait()
                 self._cleanup_process(proc)
 
