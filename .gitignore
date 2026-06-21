@@ -16,7 +16,6 @@ python_embeded/
 faster-whisper*/
 build/
 dist/
-separate/
 translate/
 whisper-faster/whisper-faster.exe
 *.dll
