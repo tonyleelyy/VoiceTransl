@@ -141,7 +141,8 @@ class ConcurrentTranslationPool:
             send_status(f"[INFO] [进程{worker_idx}] 正在用 {engine} 翻译 {workspace}...")
             creationflags = 0x08000000 if os.name == 'nt' else 0
             result = subprocess.run([*_TRANSLATE_CMD, workspace, engine],
-                                   check=True, capture_output=True, text=True, timeout=300, creationflags=creationflags)
+                                   check=True, capture_output=True, text=True,
+                                   creationflags=creationflags)
         except Exception as e:
             send_status(f"[ERROR] [进程{worker_idx}] 翻译 {base} 失败: {e}")
             raise
