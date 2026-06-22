@@ -2103,8 +2103,15 @@ class MainWorker(QObject):
         else:
             stop_named_proc('whisper_faster')
 
-        # 转换该片段的SRT到JSON
-        make_prompt(base_path + '.srt', json_path)
+        # 转换该片段的SRT到JSON，完成后清理中间文件
+        intermediate_srt = base_path + '.srt'
+        make_prompt(intermediate_srt, json_path)
+        # 清理 whisper 产出的中间 .16k.srt 文件
+        if intermediate_srt.endswith('.16k.srt') and os.path.exists(intermediate_srt):
+            try:
+                os.remove(intermediate_srt)
+            except Exception:
+                pass
 
     def _get_audio_duration(self, audio_file):
         """获取音频文件时长（秒）"""
