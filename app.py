@@ -135,8 +135,9 @@ class ConcurrentTranslationPool:
 
         try:
             send_status(f"[INFO] [进程{worker_idx}] 正在用 {engine} 翻译 {workspace}...")
+            creationflags = 0x08000000 if os.name == 'nt' else 0
             result = subprocess.run(['translate/translate', workspace, engine],
-                                   check=True, capture_output=True, text=True, timeout=300)
+                                   check=True, capture_output=True, text=True, timeout=300, creationflags=creationflags)
         except Exception as e:
             send_status(f"[ERROR] [进程{worker_idx}] 翻译 {base} 失败: {e}")
             raise
@@ -2049,10 +2050,11 @@ class MainWorker(QObject):
     def _get_audio_duration(self, audio_file):
         """获取音频文件时长（秒）"""
         try:
+            creationflags = 0x08000000 if os.name == 'nt' else 0
             result = subprocess.run(
                 ['ffmpeg/ffprobe', '-v', 'error', '-show_entries', 'format=duration',
                  '-of', 'default=noprint_wrappers=1:nokey=1', audio_file],
-                capture_output=True, text=True, timeout=30
+                capture_output=True, text=True, timeout=30, creationflags=creationflags
             )
             return float(result.stdout.strip())
         except Exception as e:
@@ -2081,10 +2083,11 @@ class MainWorker(QObject):
             segment_file = os.path.join(output_dir, f"segment_{i:04d}.16k.wav")
 
             try:
+                creationflags = 0x08000000 if os.name == 'nt' else 0
                 proc = subprocess.run(
                     ['ffmpeg/ffmpeg', '-y', '-i', audio_file, '-ss', str(start_time),
                      '-t', str(duration), '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', segment_file],
-                    capture_output=True, timeout=120
+                    capture_output=True, timeout=120, creationflags=creationflags
                 )
                 if proc.returncode == 0 and os.path.exists(segment_file):
                     segment_files.append(segment_file)
