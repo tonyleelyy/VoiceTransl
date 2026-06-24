@@ -716,6 +716,7 @@ class MainWindow(QMainWindow):
                 segment_duration = int(lines[16].strip()) if len(lines) > 16 else 10
                 change_prompt_mode = lines[17].strip() if len(lines) > 17 else '不修改'
                 auto_shutdown = (lines[18].strip().lower() == 'true') if len(lines) > 18 else False
+                target_translation_lang = lines[19].strip() if len(lines) > 19 else 'zh-cn'
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
@@ -739,6 +740,10 @@ class MainWindow(QMainWindow):
                     self.change_prompt_mode.setCurrentText(change_prompt_mode)
                 if hasattr(self, 'auto_shutdown_checkbox'):
                     self.auto_shutdown_checkbox.setChecked(auto_shutdown)
+                if hasattr(self, 'target_lang') and target_translation_lang:
+                    idx = self.target_lang.findData(target_translation_lang)
+                    if idx >= 0:
+                        self.target_lang.setCurrentIndex(idx)
 
         if not self.output_dir_edit.text().strip():
             self.output_dir_edit.setText(self.default_output_dir())
@@ -1037,6 +1042,28 @@ class MainWindow(QMainWindow):
         lang_layout.addStretch()
         self.input_output_layout.addLayout(lang_layout)
 
+        # Transcription Language
+        trans_lang_layout = QHBoxLayout()
+        self.io_transcription_lang_label = BodyLabel(_("io_transcription_lang_label"))
+        trans_lang_layout.addWidget(self.io_transcription_lang_label)
+        self.transcription_lang = QComboBox()
+        self.transcription_lang.addItems(['ja', 'en', 'ko', 'ru', 'fr', 'zh'])
+        trans_lang_layout.addWidget(self.transcription_lang)
+        trans_lang_layout.addStretch()
+        self.input_output_layout.addLayout(trans_lang_layout)
+
+        # Target Translation Language
+        target_lang_layout = QHBoxLayout()
+        self.io_target_lang_label = BodyLabel(_("io_target_lang_label"))
+        target_lang_layout.addWidget(self.io_target_lang_label)
+        self.target_lang = QComboBox()
+        TARGET_LANG_CODES = ['zh-cn', 'zh-tw', 'en', 'ja', 'ko', 'ru', 'fr']
+        for code in TARGET_LANG_CODES:
+            self.target_lang.addItem(_(f"target_lang_{code.replace('-', '_')}"), code)
+        target_lang_layout.addWidget(self.target_lang)
+        target_lang_layout.addStretch()
+        self.input_output_layout.addLayout(target_lang_layout)
+
         # Input Section (local files or URLs)
         self.io_input_label = BodyLabel(_("io_input_label"))
         self.input_output_layout.addWidget(self.io_input_label)
@@ -1212,6 +1239,20 @@ class MainWindow(QMainWindow):
         self.settings_layout.addWidget(self.open_uvr_dir)
 
         self.addSubInterface(self.settings_tab, FluentIcon.SETTING, _("tab_settings"), NavigationItemPosition.TOP)
+
+        # Sync transcription language between IO tab and Settings tab
+        def sync_transcription_to_settings(idx):
+            self.input_lang.blockSignals(True)
+            self.input_lang.setCurrentIndex(idx)
+            self.input_lang.blockSignals(False)
+
+        def sync_settings_to_transcription(idx):
+            self.transcription_lang.blockSignals(True)
+            self.transcription_lang.setCurrentIndex(idx)
+            self.transcription_lang.blockSignals(False)
+
+        self.transcription_lang.currentIndexChanged.connect(sync_transcription_to_settings)
+        self.input_lang.currentIndexChanged.connect(sync_settings_to_transcription)
 
     def initAdvancedSettingTab(self):
         self.advanced_settings_tab = Widget("AdvancedSettings", self)
@@ -1644,11 +1685,12 @@ class MainWorker(QObject):
         segment_duration = self.master.segment_duration_spin.value()
         change_prompt_mode = self.master.change_prompt_mode.currentText() if hasattr(self.master, 'change_prompt_mode') else '不修改'
         auto_shutdown = self.master.auto_shutdown_checkbox.isChecked() if hasattr(self.master, 'auto_shutdown_checkbox') else False
+        target_translation_lang = self.master.target_lang.currentData() if hasattr(self.master, 'target_lang') else 'zh-cn'
         current_lang = get_language()
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n{self.master.max_concurrent_spin.value()}\n{enable_segment}\n{segment_duration}\n{change_prompt_mode}\n{auto_shutdown}\n{current_lang}\n")
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n{self.master.max_concurrent_spin.value()}\n{enable_segment}\n{segment_duration}\n{change_prompt_mode}\n{auto_shutdown}\n{target_translation_lang}\n{current_lang}\n")
 
         # save whisper param
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
@@ -1696,7 +1738,8 @@ class MainWorker(QObject):
         # Update language setting
         if 'common' not in cfg:
             cfg['common'] = {}
-        cfg['common']['language'] = f"zh-cn"
+        target_lang = self.master.target_lang.currentData() if hasattr(self.master, 'target_lang') else 'zh-cn'
+        cfg['common']['language'] = target_lang
 
         # Update backendSpecific configuration
         if 'backendSpecific' not in cfg:
@@ -2289,12 +2332,13 @@ class MainWorker(QObject):
         # 统一刷新翻译配置
         self.update_translation_config()
 
-        need_translate = translator != '不进行翻译' and language != 'zh'
+        target_lang = self.master.target_lang.currentData() if hasattr(self.master, 'target_lang') else 'zh-cn'
+        need_translate = translator != '不进行翻译' and not (language == 'zh' and target_lang in ('zh-cn', 'zh-tw'))
         if not need_translate:
             if translator == '不进行翻译':
                 self.status.emit("[INFO] 翻译器未选择，按单文件流程跳过翻译步骤...")
-            elif language == 'zh':
-                self.status.emit("[INFO] 听写语言为中文，按单文件流程跳过翻译步骤...")
+            elif language == 'zh' and target_lang in ('zh-cn', 'zh-tw'):
+                self.status.emit(_("status_skip_chinese_target"))
 
         engine = 'ForGal-json'
         if need_translate and 'sakura' in translator:
