@@ -141,7 +141,10 @@ async def run_galtransl(cfg: CProjectConfig, translator: str, stop_event=None):
         handler = logging.StreamHandler(stream=sys.stdout)
         handler.setFormatter(CONSOLE_FORMAT)
         handler.addFilter(_thread_filter)
-        handler.addFilter(_ServerStatusFilter())
+        # 当 GALTRANSL_VERBOSE_STDOUT 环境变量存在时，跳过 _ServerStatusFilter，
+        # 让所有 INFO+ 日志通过，由 VoiceTransl GUI 端进行过滤
+        if not os.environ.get('GALTRANSL_VERBOSE_STDOUT'):
+            handler.addFilter(_ServerStatusFilter())
     else:
         # CLI job: 完整终端输出 + alive_bar
         handler = logging.StreamHandler(stream=sys.stdout)
