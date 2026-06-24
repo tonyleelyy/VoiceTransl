@@ -6,6 +6,7 @@ os.chdir(sys._MEIPASS) if _FROZEN else os.chdir(os.path.dirname(os.path.abspath(
 _TRANSLATE_CMD = ['translate/translate'] if _FROZEN else [sys.executable, 'translate.py']
 _SEPARATE_CMD = ['separate/separate'] if _FROZEN else [sys.executable, 'separate.py']
 import shutil
+from i18n import _, set_language, get_language
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QDateTime, QSize
 from PyQt5.QtWidgets import QApplication, QVBoxLayout, QFileDialog, QFrame, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QCheckBox, QDialog, QLabel
@@ -799,10 +800,10 @@ class MainWindow(QMainWindow):
         self.msg_queue = UIMessageQueue(LOG_PATH)
         self.thread = None
         self.worker = None
-        self.setWindowTitle("VoiceTransl")
+        self.setWindowTitle(_("window_title"))
         self.setWindowIcon(QtGui.QIcon('icon.png'))
         self.init_system_tray()
-        self.status.connect(lambda x: self.setWindowTitle(f"VoiceTransl - {x}"))
+        self.status.connect(lambda x: self.setWindowTitle(f"{_('window_title')} - {x}"))
         self.resize(800, 600)
         self.splashScreen = SplashScreen(self.windowIcon(), self)
         self.splashScreen.setIconSize(QSize(102, 102))
@@ -830,7 +831,7 @@ class MainWindow(QMainWindow):
         self.load_config()
 
     def browse_synth_video(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "选择视频文件", "", "Video Files (*.mp4 *.mkv *.avi *.mov *.flv);;All Files (*)")
+        files, _ = QFileDialog.getOpenFileNames(self, _("dialog_select_video"), "", "Video Files (*.mp4 *.mkv *.avi *.mov *.flv);;All Files (*)")
         if files:
             current_text = self.synth_video_files_list.toPlainText().strip()
             new_text = "\n".join(files)
@@ -840,7 +841,7 @@ class MainWindow(QMainWindow):
                 self.synth_video_files_list.setText(new_text)
 
     def browse_synth_srt(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "选择字幕文件", "", "Subtitle Files (*.srt *.ass *.vtt);;All Files (*)")
+        files, _ = QFileDialog.getOpenFileNames(self, _("dialog_select_subtitle"), "", "Subtitle Files (*.srt *.ass *.vtt);;All Files (*)")
         if files:
             current_text = self.synth_srt_files_list.toPlainText().strip()
             new_text = "\n".join(files)
@@ -851,7 +852,7 @@ class MainWindow(QMainWindow):
 
     def browse_output_dir(self):
         current_dir = self.output_dir_edit.text().strip() or self.default_output_dir()
-        selected = QFileDialog.getExistingDirectory(self, "选择输出目录", current_dir)
+        selected = QFileDialog.getExistingDirectory(self, _("dialog_select_output_dir"), current_dir)
         if selected:
             self.output_dir_edit.setText(selected)
 
@@ -1129,11 +1130,11 @@ class MainWindow(QMainWindow):
             return
 
         self.tray_icon = QSystemTrayIcon(self.windowIcon(), self)
-        self.tray_icon.setToolTip("VoiceTransl")
+        self.tray_icon.setToolTip(_("tray_tooltip"))
 
         tray_menu = QMenu(self)
-        action_restore = QAction("显示主界面", self)
-        action_quit = QAction("退出", self)
+        action_restore = QAction(_("tray_show"), self)
+        action_quit = QAction(_("tray_quit"), self)
         action_restore.triggered.connect(self.restore_from_tray)
         action_quit.triggered.connect(QApplication.instance().quit)
 
@@ -1209,7 +1210,7 @@ class MainWindow(QMainWindow):
                                 pass
 
         if local_model_running:
-            print("[INFO] 本地模型进程已关闭")
+            print(_("status_local_model_closed"))
 
         if getattr(self, 'tray_icon', None):
             self.tray_icon.hide()
@@ -1238,20 +1239,22 @@ class MainWindow(QMainWindow):
         if event.type() == QtCore.QEvent.WindowStateChange and self.isMinimized():
             if getattr(self, 'tray_icon', None):
                 QTimer.singleShot(0, self.hide)
-                self.tray_icon.showMessage("VoiceTransl", "程序已最小化到托盘", QSystemTrayIcon.Information, 2000)
+                self.tray_icon.showMessage("VoiceTransl", _("tray_minimized"), QSystemTrayIcon.Information, 2000)
 
     def initLogTab(self):
         self.log_tab = Widget("Log", self)
         self.log_layout = self.log_tab.vBoxLayout
 
-        self.log_layout.addWidget(BodyLabel("🖥️ 实时输出信息"))
+        self.log_realtime_label = BodyLabel(_("log_realtime_label"))
+        self.log_layout.addWidget(self.log_realtime_label)
 
         self.output_text_edit = QTextEdit()
         self.output_text_edit.setReadOnly(True)
         self.output_text_edit.setPlaceholderText("当前无输出信息...")
         self.log_layout.addWidget(self.output_text_edit)
 
-        self.log_layout.addWidget(BodyLabel("📜 日志文件"))
+        self.log_file_label = BodyLabel(_("log_file_label"))
+        self.log_layout.addWidget(self.log_file_label)
 
         # 日志过滤工具栏
         filter_layout = QHBoxLayout()
@@ -1274,15 +1277,15 @@ class MainWindow(QMainWindow):
         # log
         self.log_display = QPlainTextEdit(self)
         self.log_display.setReadOnly(True)
-        self.log_display.setStyleSheet("font-family: Consolas, Monospace; font-size: 10pt;") # 设置等宽字体
+        self.log_display.setStyleSheet("font-family: Consolas, Monospace; font-size: 10pt;")
         self.log_layout.addWidget(self.log_display)
 
         # open log file button
-        self.open_log_button = QPushButton("📂 打开日志文件")
+        self.open_log_button = QPushButton(_("log_open_btn"))
         self.open_log_button.clicked.connect(lambda: open_path(LOG_PATH))
         self.log_layout.addWidget(self.open_log_button)
 
-        self.addSubInterface(self.log_tab, FluentIcon.INFO, "日志", NavigationItemPosition.TOP)
+        self.addSubInterface(self.log_tab, FluentIcon.INFO, _("tab_log"), NavigationItemPosition.TOP)
 
     def _on_log_filter_changed(self, filter_text: str):
         """级别过滤变更：仅影响后续到达的 detail 消息（已显示内容不变）"""
@@ -1297,39 +1300,27 @@ class MainWindow(QMainWindow):
         self.about_layout = self.about_tab.vBoxLayout
 
         # introduce
-        self.about_layout.addWidget(TitleLabel("🎉 感谢使用VoiceTransl！"))
+        self.about_title_label = TitleLabel(_("about_title"))
+        self.about_layout.addWidget(self.about_title_label)
 
         # mode
         self.mode_text = QTextEdit()
         self.mode_text.setReadOnly(True)
-        self.mode_text.setPlainText(
-"""
-VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括视频下载，音频提取，听写打轴，字幕翻译，视频合成，字幕总结。
-
-界面介绍：
-- 关于：查看软件介绍和支持方式。
-- 输入输出：输入音视频文件路径或视频链接，设置代理和输出格式，运行生成字幕。
-- 分离工具：分离视频中的人声和伴奏，切分音频文件。
-- 合成工具：将音频和图片合成为视频，将字幕文件加入视频。
-- 总结工具：对字幕文件内容进行总结，生成带时间戳的摘要。
-- 语音模型：选择Whisper或Faster Whisper模型，设置听写语言和参数，选择伴奏分离模型。
-- 语言模型：选择翻译模型类别，配置在线模型令牌、地址和名称。
-- 字典设置：配置翻译前、中、后使用的字典，以及额外提示信息。
-- 日志：实时查看输出信息和日志文件。
-""")
+        self.mode_text.setPlainText(_("about_text"))
         self.about_layout.addWidget(self.mode_text)
 
         # wiki button
-        self.btn_wiki = QPushButton("📖 查看使用说明和更新日志")
+        self.btn_wiki = QPushButton(_("about_wiki_btn"))
         self.btn_wiki.clicked.connect(lambda: open_url("https://github.com/shinnpuru/VoiceTransl/wiki"))
         self.about_layout.addWidget(self.btn_wiki)
 
         # sponsorship buttons
-        self.about_layout.addWidget(TitleLabel("🎇 支持昕蒲"))
+        self.about_sponsor_title = TitleLabel(_("about_sponsor_title"))
+        self.about_layout.addWidget(self.about_sponsor_title)
         btn_layout = QHBoxLayout()
-        self.btn_afdian = QPushButton("⚡ 爱发电（微信和支付宝）")
-        self.btn_bilibili = QPushButton("⚡ B站充电（免费B币）")
-        self.btn_kofi = QPushButton("⚡ Ko-fi（Paypal和信用卡）")
+        self.btn_afdian = QPushButton(_("about_afdian_btn"))
+        self.btn_bilibili = QPushButton(_("about_bilibili_btn"))
+        self.btn_kofi = QPushButton(_("about_kofi_btn"))
 
         def open_url(url):
             QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
@@ -1344,48 +1335,90 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.about_layout.addLayout(btn_layout)
 
         # start
-        self.start_button = QPushButton("🚀 开始")
+        self.start_button = QPushButton(_("about_start_btn"))
         self.start_button.clicked.connect(lambda: self.switchTo(self.input_output_tab))
         self.about_layout.addWidget(self.start_button)
 
-        self.addSubInterface(self.about_tab, FluentIcon.HEART, "关于", NavigationItemPosition.TOP)
+        self.addSubInterface(self.about_tab, FluentIcon.HEART, _("tab_about"), NavigationItemPosition.TOP)
         
     def initInputOutputTab(self):
         self.input_output_tab = Widget("Home", self)
         self.input_output_layout = self.input_output_tab.vBoxLayout
-        
+
+        # Language Selector
+        lang_layout = QHBoxLayout()
+        self.lang_selector_label = BodyLabel(_("lang_selector_label"))
+        lang_layout.addWidget(self.lang_selector_label)
+        self.lang_selector = QComboBox()
+        self.lang_selector.addItem(_("lang_zh"))
+        self.lang_selector.addItem(_("lang_en"))
+        self.lang_selector.addItem(_("lang_ja"))
+        # Set current index based on saved/current language
+        lang_map = {"zh": 0, "en": 1, "ja": 2}
+        self.lang_selector.setCurrentIndex(lang_map.get(get_language(), 0))
+        self.lang_selector.currentIndexChanged.connect(self._on_language_changed)
+        lang_layout.addWidget(self.lang_selector)
+        lang_layout.addStretch()
+        self.input_output_layout.addLayout(lang_layout)
+
+        # Transcription Language
+        trans_lang_layout = QHBoxLayout()
+        self.io_transcription_lang_label = BodyLabel(_("io_transcription_lang_label"))
+        trans_lang_layout.addWidget(self.io_transcription_lang_label)
+        self.transcription_lang = QComboBox()
+        self.transcription_lang.addItems(['ja', 'en', 'ko', 'ru', 'fr', 'zh'])
+        trans_lang_layout.addWidget(self.transcription_lang)
+        trans_lang_layout.addStretch()
+        self.input_output_layout.addLayout(trans_lang_layout)
+
+        # Target Translation Language
+        target_lang_layout = QHBoxLayout()
+        self.io_target_lang_label = BodyLabel(_("io_target_lang_label"))
+        target_lang_layout.addWidget(self.io_target_lang_label)
+        self.target_lang = QComboBox()
+        TARGET_LANG_CODES = ['zh-cn', 'zh-tw', 'en', 'ja', 'ko', 'ru', 'fr']
+        for code in TARGET_LANG_CODES:
+            self.target_lang.addItem(_(f"target_lang_{code.replace('-', '_')}"), code)
+        target_lang_layout.addWidget(self.target_lang)
+        target_lang_layout.addStretch()
+        self.input_output_layout.addLayout(target_lang_layout)
+
         # Input Section (local files or URLs)
-        self.input_output_layout.addWidget(BodyLabel("📂 拖拽音视频/SRT文件，或输入B站BV号、YouTube及其他视频链接（每行一个）。路径请勿包含非英文和空格。"))
+        self.io_input_label = BodyLabel(_("io_input_label"))
+        self.input_output_layout.addWidget(self.io_input_label)
         self.input_files_list = QTextEdit()
         self.input_files_list.setAcceptDrops(True)
         self._bind_drop_event(self.input_files_list)
-        self.input_files_list.setPlaceholderText("例如：C:/video.mp4或https://www.youtube.com/watch?v=...或BV1Lxt5e8EJF")
+        self.input_files_list.setPlaceholderText(_("io_input_placeholder"))
         self.input_output_layout.addWidget(self.input_files_list)
 
         # Proxy Section
-        self.input_output_layout.addWidget(BodyLabel("🌐 设置代理地址以便下载视频和翻译。"))
+        self.io_proxy_label = BodyLabel(_("io_proxy_label"))
+        self.input_output_layout.addWidget(self.io_proxy_label)
         self.proxy_address = QLineEdit()
-        self.proxy_address.setPlaceholderText("例如：http://127.0.0.1:7890，留空为不使用")
+        self.proxy_address.setPlaceholderText(_("io_proxy_placeholder"))
         self.input_output_layout.addWidget(self.proxy_address)
 
         # Output Directory Section
-        self.input_output_layout.addWidget(BodyLabel("📁 设置输出目录（下载文件与生成字幕）。"))
+        self.io_output_dir_label = BodyLabel(_("io_output_dir_label"))
+        self.input_output_layout.addWidget(self.io_output_dir_label)
         output_dir_layout = QHBoxLayout()
         self.output_dir_edit = QLineEdit()
         self.output_dir_edit.setPlaceholderText(self.default_output_dir())
         self.output_dir_edit.setText(self.default_output_dir())
         output_dir_layout.addWidget(self.output_dir_edit)
-        self.output_dir_button = QPushButton("📂 选择目录")
+        self.output_dir_button = QPushButton(_("io_browse_dir_btn"))
         self.output_dir_button.clicked.connect(self.browse_output_dir)
         output_dir_layout.addWidget(self.output_dir_button)
         self.input_output_layout.addLayout(output_dir_layout)
 
-        self.use_input_dir_checkbox = QCheckBox("输出到音频目录（每个文件输出到其所在目录）")
+        self.use_input_dir_checkbox = QCheckBox(_("io_use_input_dir_checkbox"))
         self.use_input_dir_checkbox.stateChanged.connect(self.update_output_dir_controls)
         self.input_output_layout.addWidget(self.use_input_dir_checkbox)
 
         # Format Section
-        self.input_output_layout.addWidget(BodyLabel("🎥 选择输出的字幕格式。"))
+        self.io_format_label = BodyLabel(_("io_format_label"))
+        self.input_output_layout.addWidget(self.io_format_label)
         self.output_format = QComboBox()
         self.output_format.addItems(['原文SRT', '原文LRC', '中文LRC', '双语LRC', '中文SRT', '双语SRT'])
         self.output_format.setCurrentText('双语SRT')
@@ -1393,10 +1426,11 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
 
         # Segment Section
         segment_layout = QHBoxLayout()
-        self.enable_segment_checkbox = QCheckBox("启用音频分段处理（长音频分段后听写翻译再合并）")
+        self.enable_segment_checkbox = QCheckBox(_("io_segment_checkbox"))
         self.enable_segment_checkbox.stateChanged.connect(self.update_segment_controls)
         segment_layout.addWidget(self.enable_segment_checkbox)
-        segment_layout.addWidget(BodyLabel("分段时长（分钟）："))
+        self.io_segment_duration_label = BodyLabel(_("io_segment_duration_label"))
+        segment_layout.addWidget(self.io_segment_duration_label)
         self.segment_duration_spin = QSpinBox()
         self.segment_duration_spin.setRange(1, 20)
         self.segment_duration_spin.setValue(10)
@@ -1406,110 +1440,138 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.input_output_layout.addLayout(segment_layout)
 
         button_layout = QHBoxLayout()
-        self.run_button = QPushButton("🚀 运行")
+        self.run_button = QPushButton(_("io_run_btn"))
         self.run_button.clicked.connect(self.run_worker)
         button_layout.addWidget(self.run_button)
 
-        self.cancel_button = QPushButton("⛔ 取消任务")
+        self.cancel_button = QPushButton(_("io_cancel_btn"))
         self.cancel_button.clicked.connect(self.cancel_task)
         button_layout.addWidget(self.cancel_button)
-        
-        self.open_output_button = QPushButton("📁 打开输出目录")
+
+        self.open_output_button = QPushButton(_("io_open_output_btn"))
         self.open_output_button.clicked.connect(lambda: open_path(self.output_dir_edit.text().strip() or self.default_output_dir()))
         button_layout.addWidget(self.open_output_button)
 
-        self.clean_button = QPushButton("🧹 清空下载和缓存")
+        self.clean_button = QPushButton(_("io_clean_btn"))
         self.clean_button.clicked.connect(self.cleaner)
         button_layout.addWidget(self.clean_button)
 
         # Add the button row layout to the input output layout
         self.input_output_layout.addLayout(button_layout)
-        
-        self.addSubInterface(self.input_output_tab, FluentIcon.HOME, "输入输出", NavigationItemPosition.TOP)
+
+        # Auto shutdown checkbox
+        self.auto_shutdown_checkbox = QCheckBox(_("io_auto_shutdown_checkbox"))
+        self.input_output_layout.addWidget(self.auto_shutdown_checkbox)
+
+        self.addSubInterface(self.input_output_tab, FluentIcon.HOME, _("tab_input_output"), NavigationItemPosition.TOP)
 
     def initDictTab(self):
         self.dict_tab = Widget("Dict", self)
         self.dict_layout = self.dict_tab.vBoxLayout
 
-        self.dict_layout.addWidget(BodyLabel("📚 配置翻译前的字典。"))
+        self.dict_before_label = BodyLabel(_("dict_before_label"))
+        self.dict_layout.addWidget(self.dict_before_label)
         self.before_dict = QTextEdit()
-        self.before_dict.setPlaceholderText("日文原文(Tab键)日文替换词\n日文原文(Tab键)日文替换词")
+        self.before_dict.setPlaceholderText(_("dict_before_placeholder"))
         self.dict_layout.addWidget(self.before_dict)
-        
-        self.dict_layout.addWidget(BodyLabel("📚 配置翻译中的字典。"))
+
+        self.dict_gpt_label = BodyLabel(_("dict_gpt_label"))
+        self.dict_layout.addWidget(self.dict_gpt_label)
         self.gpt_dict = QTextEdit()
-        self.gpt_dict.setPlaceholderText("日文(Tab键)中文\n日文(Tab键)中文")
+        self.gpt_dict.setPlaceholderText(_("dict_gpt_placeholder"))
         self.dict_layout.addWidget(self.gpt_dict)
-        
-        self.dict_layout.addWidget(BodyLabel("📚 配置翻译后的字典。"))
+
+        self.dict_after_label = BodyLabel(_("dict_after_label"))
+        self.dict_layout.addWidget(self.dict_after_label)
         self.after_dict = QTextEdit()
-        self.after_dict.setPlaceholderText("中文原文(Tab键)中文替换词\n中文原文(Tab键)中文替换词")
+        self.after_dict.setPlaceholderText(_("dict_after_placeholder"))
         self.dict_layout.addWidget(self.after_dict)
 
-        self.dict_layout.addWidget(BodyLabel("📕 配置额外提示。"))
+        self.dict_extra_label = BodyLabel(_("dict_extra_label"))
+        self.dict_layout.addWidget(self.dict_extra_label)
         self.extra_prompt = QTextEdit()
-        self.extra_prompt.setPlaceholderText("请在这里输入额外的提示信息，例如世界书或台本内容。")
+        self.extra_prompt.setPlaceholderText(_("dict_extra_placeholder"))
         self.dict_layout.addWidget(self.extra_prompt)
 
-        self.dict_layout.addWidget(BodyLabel("📝 额外提示模式（选择如何处理额外提示）"))
+        self.dict_prompt_mode_label = BodyLabel(_("dict_prompt_mode_label"))
+        self.dict_layout.addWidget(self.dict_prompt_mode_label)
         self.change_prompt_mode = QComboBox()
         self.change_prompt_mode.addItems(['不修改', '追加', '覆盖'])
         self.change_prompt_mode.setCurrentText('不修改')
         self.dict_layout.addWidget(self.change_prompt_mode)
 
-        self.addSubInterface(self.dict_tab, FluentIcon.SETTING, "字典设置", NavigationItemPosition.TOP)
+        self.addSubInterface(self.dict_tab, FluentIcon.SETTING, _("tab_dict"), NavigationItemPosition.TOP)
         
     def initSettingsTab(self):
         self.settings_tab = Widget("Settings", self)
         self.settings_layout = self.settings_tab.vBoxLayout
         
         # Whisper Section
-        self.settings_layout.addWidget(BodyLabel("🗣️ 选择用于语音识别的模型文件。"))
+        self.settings_whisper_label = BodyLabel(_("settings_whisper_label"))
+        self.settings_layout.addWidget(self.settings_whisper_label)
         self.whisper_file = QComboBox()
         whisper_lst = [i for i in os.listdir('whisper') if i.startswith('ggml') and i.endswith('bin') and not 'silero' in i] + [i for i in os.listdir('whisper-faster') if i.startswith('faster-whisper')] + ['不进行听写']
         self.whisper_file.addItems(whisper_lst)
         self.settings_layout.addWidget(self.whisper_file)
 
-        self.settings_layout.addWidget(BodyLabel("🌍 选择输入的语言。(ja=日语，en=英语，ko=韩语，ru=俄语，fr=法语，zh=中文，仅听写）"))
+        self.settings_lang_label = BodyLabel(_("settings_lang_label"))
+        self.settings_layout.addWidget(self.settings_lang_label)
         self.input_lang = QComboBox()
         self.input_lang.addItems(['ja','en','ko','ru','fr','zh'])
         self.settings_layout.addWidget(self.input_lang)
 
-        self.settings_layout.addWidget(BodyLabel("🔧 输入Whisper命令行参数。(CPU，A卡，I卡，Mac，Linux)"))
+        self.settings_whisper_param_label = BodyLabel(_("settings_whisper_param_label"))
+        self.settings_layout.addWidget(self.settings_whisper_param_label)
         self.param_whisper = QTextEdit()
-        self.param_whisper.setPlaceholderText("每个参数空格隔开，请参考Whisper.cpp，不清楚请保持默认。")
+        self.param_whisper.setPlaceholderText(_("settings_whisper_param_placeholder"))
         self.settings_layout.addWidget(self.param_whisper)
 
-        self.settings_layout.addWidget(BodyLabel("🔧 输入Whisper-Faster命令行参数。(N卡)"))
+        self.settings_faster_param_label = BodyLabel(_("settings_faster_param_label"))
+        self.settings_layout.addWidget(self.settings_faster_param_label)
         self.param_whisper_faster = QTextEdit()
-        self.param_whisper_faster.setPlaceholderText("每个参数空格隔开，请参考Faster Whisper文档，不清楚请保持默认。")
+        self.param_whisper_faster.setPlaceholderText(_("settings_faster_param_placeholder"))
         self.settings_layout.addWidget(self.param_whisper_faster)
 
         button_layout = QHBoxLayout()
 
-        self.open_whisper_dir = QPushButton("📁 打开Whisper目录")
+        self.open_whisper_dir = QPushButton(_("settings_open_whisper_btn"))
         self.open_whisper_dir.clicked.connect(lambda: open_path(os.path.join(os.getcwd(),'whisper')))
-        self.open_faster_dir = QPushButton("📁 打开Faster Whisper目录")
+        self.open_faster_dir = QPushButton(_("settings_open_faster_btn"))
         self.open_faster_dir.clicked.connect(lambda: open_path(os.path.join(os.getcwd(),'whisper-faster')))
         button_layout.addWidget(self.open_whisper_dir)
         button_layout.addWidget(self.open_faster_dir)
 
-        self.refresh_speech_models_button = QPushButton("🔄 刷新语音模型列表")
+        self.refresh_speech_models_button = QPushButton(_("settings_refresh_speech_btn"))
         self.refresh_speech_models_button.clicked.connect(self.refresh_speech_model_lists)
         button_layout.addWidget(self.refresh_speech_models_button)
         self.settings_layout.addLayout(button_layout)
 
         # UVR models move into speech settings for consistency
-        self.settings_layout.addWidget(BodyLabel("🎤 选择用于伴奏分离的模型文件。"))
+        self.settings_uvr_label = BodyLabel(_("settings_uvr_label"))
+        self.settings_layout.addWidget(self.settings_uvr_label)
         self.uvr_file = QComboBox()
         uvr_lst = [i for i in os.listdir('separate') if i.endswith('onnx')]
         self.uvr_file.addItems(uvr_lst)
         self.settings_layout.addWidget(self.uvr_file)
-        self.open_uvr_dir = QPushButton("📁 打开UVR模型目录")
+        self.open_uvr_dir = QPushButton(_("settings_open_uvr_btn"))
         self.open_uvr_dir.clicked.connect(lambda: open_path(os.path.join(os.getcwd(),'separate')))
         self.settings_layout.addWidget(self.open_uvr_dir)
 
-        self.addSubInterface(self.settings_tab, FluentIcon.SETTING, "语音模型", NavigationItemPosition.TOP)
+        self.addSubInterface(self.settings_tab, FluentIcon.SETTING, _("tab_settings"), NavigationItemPosition.TOP)
+
+        # Sync transcription language between IO tab and Settings tab
+        def sync_transcription_to_settings(idx):
+            self.input_lang.blockSignals(True)
+            self.input_lang.setCurrentIndex(idx)
+            self.input_lang.blockSignals(False)
+
+        def sync_settings_to_transcription(idx):
+            self.transcription_lang.blockSignals(True)
+            self.transcription_lang.setCurrentIndex(idx)
+            self.transcription_lang.blockSignals(False)
+
+        self.transcription_lang.currentIndexChanged.connect(sync_transcription_to_settings)
+        self.input_lang.currentIndexChanged.connect(sync_settings_to_transcription)
 
     def initAdvancedSettingTab(self):
         self.advanced_settings_tab = Widget("AdvancedSettings", self)
@@ -1517,77 +1579,86 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
 
         # Translator Section
         model_row = QHBoxLayout()
-        model_row.addWidget(BodyLabel("🤖 翻译模型类别："))
+        self.adv_translator_label = BodyLabel(_("adv_translator_label"))
+        model_row.addWidget(self.adv_translator_label)
         self.translator_group = QComboBox()
         self.translator_group.addItems(TRANSLATOR_SUPPORTED)
         model_row.addWidget(self.translator_group)
         model_row.addSpacing(20)
-        model_row.addWidget(BodyLabel("最大并发数（0为串行，1以上为并发）："))
+        self.adv_concurrency_label = BodyLabel(_("adv_concurrency_label"))
+        model_row.addWidget(self.adv_concurrency_label)
         self.max_concurrent_spin = QSpinBox()
         self.max_concurrent_spin.setRange(0, 20)
         self.max_concurrent_spin.setValue(0)
         model_row.addWidget(self.max_concurrent_spin)
         model_row.addStretch()
         self.advanced_settings_layout.addLayout(model_row)
-        
-        self.advanced_settings_layout.addWidget(BodyLabel("🚀 在线模型令牌"))
+
+        self.adv_online_token_label = BodyLabel(_("adv_online_token_label"))
+        self.advanced_settings_layout.addWidget(self.adv_online_token_label)
         self.gpt_token = QLineEdit()
-        self.gpt_token.setPlaceholderText("留空为使用上次配置的Token。")
+        self.gpt_token.setPlaceholderText(_("adv_online_token_placeholder"))
         self.advanced_settings_layout.addWidget(self.gpt_token)
 
-        self.advanced_settings_layout.addWidget(BodyLabel("🚀 在线模型名称"))
+        self.adv_online_model_label = BodyLabel(_("adv_online_model_label"))
+        self.advanced_settings_layout.addWidget(self.adv_online_model_label)
         self.gpt_model = QLineEdit()
-        self.gpt_model.setPlaceholderText("例如：deepseek-chat")
+        self.gpt_model.setPlaceholderText(_("adv_online_model_placeholder"))
         self.advanced_settings_layout.addWidget(self.gpt_model)
 
-        self.advanced_settings_layout.addWidget(BodyLabel("🚀 在线模型API地址，省略/v1/chat/completions（选择自定义模型）"))
+        self.adv_online_address_label = BodyLabel(_("adv_online_address_label"))
+        self.advanced_settings_layout.addWidget(self.adv_online_address_label)
         self.gpt_address = QLineEdit()
-        self.gpt_address.setPlaceholderText("例如：http://127.0.0.1:11434")
+        self.gpt_address.setPlaceholderText(_("adv_online_address_placeholder"))
         self.advanced_settings_layout.addWidget(self.gpt_address)
-        
-        self.advanced_settings_layout.addWidget(BodyLabel("💻 离线模型文件"))
+
+        self.adv_offline_model_label = BodyLabel(_("adv_offline_model_label"))
+        self.advanced_settings_layout.addWidget(self.adv_offline_model_label)
         self.sakura_file = QComboBox()
         sakura_lst = [i for i in os.listdir('llama') if i.endswith('gguf')]
         self.sakura_file.addItems(sakura_lst)
         self.advanced_settings_layout.addWidget(self.sakura_file)
-        
-        self.advanced_settings_layout.addWidget(BodyLabel("💻 离线模型GPU加载层数"))
+
+        self.adv_offline_gpu_label = BodyLabel(_("adv_offline_gpu_label"))
+        self.advanced_settings_layout.addWidget(self.adv_offline_gpu_label)
         self.sakura_mode = QLineEdit()
         self.sakura_mode.setText("100")
         self.advanced_settings_layout.addWidget(self.sakura_mode)
 
-        self.advanced_settings_layout.addWidget(BodyLabel("💻 离线模型命令行参数。"))
+        self.adv_offline_param_label = BodyLabel(_("adv_offline_param_label"))
+        self.advanced_settings_layout.addWidget(self.adv_offline_param_label)
         self.param_llama = QTextEdit()
-        self.param_llama.setPlaceholderText("每个参数空格隔开，请参考Llama.cpp文档，不清楚请保持默认。")
+        self.param_llama.setPlaceholderText(_("adv_offline_param_placeholder"))
         self.advanced_settings_layout.addWidget(self.param_llama)
 
         button_layout = QHBoxLayout()
 
-        self.open_model_dir = QPushButton("📁 打开离线模型目录")
+        self.open_model_dir = QPushButton(_("adv_open_model_btn"))
         self.open_model_dir.clicked.connect(lambda: open_path(os.path.join(os.getcwd(),'llama')))
         button_layout.addWidget(self.open_model_dir)
 
-        self.refresh_language_models_button = QPushButton("🔄 刷新离线模型列表")
+        self.refresh_language_models_button = QPushButton(_("adv_refresh_model_btn"))
         self.refresh_language_models_button.clicked.connect(self.refresh_language_model_lists)
         button_layout.addWidget(self.refresh_language_models_button)
 
-        self.test_online_button = QPushButton("🔍 测试模型API并列出可用模型")
+        self.test_online_button = QPushButton(_("adv_test_api_btn"))
         self.test_online_button.clicked.connect(self.run_test_online_api)
         button_layout.addWidget(self.test_online_button)
         self.advanced_settings_layout.addLayout(button_layout)
 
-        self.addSubInterface(self.advanced_settings_tab, FluentIcon.SETTING, "语言模型", NavigationItemPosition.TOP)
+        self.addSubInterface(self.advanced_settings_tab, FluentIcon.SETTING, _("tab_advanced_settings"), NavigationItemPosition.TOP)
 
     def initClipTab(self):
         self.clip_tab = Widget("Clip", self)
         self.clip_layout = self.clip_tab.vBoxLayout
 
         # Clip Section
-        self.clip_layout.addWidget(BodyLabel("🔪 切片工具"))
+        self.clip_tool_label = BodyLabel(_("clip_tool_label"))
+        self.clip_layout.addWidget(self.clip_tool_label)
         self.clip_files_list = QTextEdit()
         self.clip_files_list.setAcceptDrops(True)
         self._bind_drop_event(self.clip_files_list)
-        self.clip_files_list.setPlaceholderText("拖拽视频文件到方框内，并填写开始和结束时间，点击运行即可。")
+        self.clip_files_list.setPlaceholderText(_("clip_placeholder"))
         self.clip_layout.addWidget(self.clip_files_list)
 
         hbox = QHBoxLayout()
@@ -1595,48 +1666,53 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         right_v = QVBoxLayout()
 
         self.clip_start_time = QLineEdit()
-        self.clip_start_time.setPlaceholderText("开始时间（HH:MM:SS.xxx）")
-        left_v.addWidget(BodyLabel("开始时间"))
+        self.clip_start_time.setPlaceholderText(_("clip_start_placeholder"))
+        self.clip_start_label = BodyLabel(_("clip_start_label"))
+        left_v.addWidget(self.clip_start_label)
         left_v.addWidget(self.clip_start_time)
 
         self.clip_end_time = QLineEdit()
-        self.clip_end_time.setPlaceholderText("结束时间（HH:MM:SS.xxx）")
-        right_v.addWidget(BodyLabel("结束时间"))
+        self.clip_end_time.setPlaceholderText(_("clip_end_placeholder"))
+        self.clip_end_label = BodyLabel(_("clip_end_label"))
+        right_v.addWidget(self.clip_end_label)
         right_v.addWidget(self.clip_end_time)
 
         hbox.addLayout(left_v)
         hbox.addLayout(right_v)
         self.clip_layout.addLayout(hbox)
 
-        self.run_clip_button = QPushButton("🚀 切片")
+        self.run_clip_button = QPushButton(_("clip_run_btn"))
         self.run_clip_button.clicked.connect(self.run_clip)
         self.clip_layout.addWidget(self.run_clip_button)
 
         # Vocal Split
-        self.clip_layout.addWidget(BodyLabel("🎤 人声分离工具"))
+        self.clip_vocal_split_label = BodyLabel(_("clip_vocal_split_label"))
+        self.clip_layout.addWidget(self.clip_vocal_split_label)
         self.uvr_file_list = QTextEdit()
         self.uvr_file_list.setAcceptDrops(True)
         self._bind_drop_event(self.uvr_file_list)
-        self.uvr_file_list.setPlaceholderText("拖拽音频文件到方框内，点击运行即可。输出文件为原文件名_vocal.wav和_no_vocal.wav。")
+        self.uvr_file_list.setPlaceholderText(_("clip_vocal_placeholder"))
         self.clip_layout.addWidget(self.uvr_file_list)
 
-        self.run_uvr_button = QPushButton("🚀 人声分离")
+        self.run_uvr_button = QPushButton(_("clip_vocal_run_btn"))
         self.run_uvr_button.clicked.connect(self.run_vocal_split)
         self.clip_layout.addWidget(self.run_uvr_button)
-        
-        self.addSubInterface(self.clip_tab, FluentIcon.DEVELOPER_TOOLS, "分离工具", NavigationItemPosition.TOP)
+
+        self.addSubInterface(self.clip_tab, FluentIcon.DEVELOPER_TOOLS, _("tab_clip"), NavigationItemPosition.TOP)
 
     def initSynthTab(self):
         self.synth_tab = Widget("Synth", self)
         self.synth_layout = self.synth_tab.vBoxLayout
 
         # Video Synth
-        self.synth_layout.addWidget(BodyLabel("💾 字幕合成工具"))
+        self.synth_label = BodyLabel(_("synth_label"))
+        self.synth_layout.addWidget(self.synth_label)
 
         # Video Files
         vbox_video = QHBoxLayout()
-        vbox_video.addWidget(BodyLabel("🎥 视频文件"))
-        self.synth_video_browse_btn = QPushButton("📂 浏览视频")
+        self.synth_video_label = BodyLabel(_("synth_video_label"))
+        vbox_video.addWidget(self.synth_video_label)
+        self.synth_video_browse_btn = QPushButton(_("synth_browse_video_btn"))
         self.synth_video_browse_btn.clicked.connect(self.browse_synth_video)
         vbox_video.addWidget(self.synth_video_browse_btn)
         self.synth_layout.addLayout(vbox_video)
@@ -1644,13 +1720,14 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.synth_video_files_list = QTextEdit()
         self.synth_video_files_list.setAcceptDrops(True)
         self._bind_drop_event(self.synth_video_files_list)
-        self.synth_video_files_list.setPlaceholderText("拖拽视频文件到此处，或点击浏览按钮选择。")
+        self.synth_video_files_list.setPlaceholderText(_("synth_video_placeholder"))
         self.synth_layout.addWidget(self.synth_video_files_list)
 
         # Subtitle Files
         vbox_srt = QHBoxLayout()
-        vbox_srt.addWidget(BodyLabel("📝 字幕文件"))
-        self.synth_srt_browse_btn = QPushButton("📂 浏览字幕")
+        self.synth_srt_label = BodyLabel(_("synth_srt_label"))
+        vbox_srt.addWidget(self.synth_srt_label)
+        self.synth_srt_browse_btn = QPushButton(_("synth_browse_srt_btn"))
         self.synth_srt_browse_btn.clicked.connect(self.browse_synth_srt)
         vbox_srt.addWidget(self.synth_srt_browse_btn)
         self.synth_layout.addLayout(vbox_srt)
@@ -1658,63 +1735,68 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         self.synth_srt_files_list = QTextEdit()
         self.synth_srt_files_list.setAcceptDrops(True)
         self._bind_drop_event(self.synth_srt_files_list)
-        self.synth_srt_files_list.setPlaceholderText("拖拽字幕文件到此处，或点击浏览按钮选择。字幕文件需要和视频文件一一对应。")
+        self.synth_srt_files_list.setPlaceholderText(_("synth_srt_placeholder"))
         self.synth_layout.addWidget(self.synth_srt_files_list)
 
         hbox = QHBoxLayout()
-        
-        hbox.addWidget(BodyLabel("字幕类型"))
+
+        self.synth_subtitle_type_label = BodyLabel(_("synth_subtitle_type_label"))
+        hbox.addWidget(self.synth_subtitle_type_label)
         self.subtitle_type_combo = QComboBox()
         self.subtitle_type_combo.addItem("硬字幕")
         self.subtitle_type_combo.addItem("软字幕")
         hbox.addWidget(self.subtitle_type_combo)
 
-        hbox.addWidget(BodyLabel("字体选择"))
+        self.synth_font_label = BodyLabel(_("synth_font_label"))
+        hbox.addWidget(self.synth_font_label)
 
         self.subtitle_font_combo = QComboBox()
         for font_item in self.collect_font_candidates():
             self.subtitle_font_combo.addItem(font_item)
         hbox.addWidget(self.subtitle_font_combo)
 
-        self.run_synth_button = QPushButton("🚀 字幕合成")
+        self.run_synth_button = QPushButton(_("synth_run_btn"))
         self.run_synth_button.clicked.connect(self.run_synth)
         hbox.addWidget(self.run_synth_button)
         self.synth_layout.addLayout(hbox)
 
         # Audio Synth
-        self.synth_layout.addWidget(BodyLabel("🎵 音频合成工具"))
+        self.synth_audio_label = BodyLabel(_("synth_audio_label"))
+        self.synth_layout.addWidget(self.synth_audio_label)
         self.synth_audio_files_list = QTextEdit()
         self.synth_audio_files_list.setAcceptDrops(True)
         self._bind_drop_event(self.synth_audio_files_list)
-        self.synth_audio_files_list.setPlaceholderText("拖拽音频文件（wav，mp3，flac）和图像（png,jpg,jpeg）到下方框内，点击运行即可。音频和图像文件需要一一对应。")
+        self.synth_audio_files_list.setPlaceholderText(_("synth_audio_placeholder"))
         self.synth_layout.addWidget(self.synth_audio_files_list)
-        self.run_synth_audio_button = QPushButton("🚀 视频合成")
+        self.run_synth_audio_button = QPushButton(_("synth_audio_run_btn"))
         self.run_synth_audio_button.clicked.connect(self.run_synth_audio)
         self.synth_layout.addWidget(self.run_synth_audio_button)
 
-        self.addSubInterface(self.synth_tab, FluentIcon.DEVELOPER_TOOLS, "合成工具", NavigationItemPosition.TOP)
+        self.addSubInterface(self.synth_tab, FluentIcon.DEVELOPER_TOOLS, _("tab_synth"), NavigationItemPosition.TOP)
 
     def initSummarizeTab(self):
         self.summarize_tab = Widget("Summarize", self)
         self.summarize_layout = self.summarize_tab.vBoxLayout
 
-        self.summarize_layout.addWidget(BodyLabel("🖋️ 模型提示"))
+        self.summarize_prompt_label = BodyLabel(_("summarize_prompt_label"))
+        self.summarize_layout.addWidget(self.summarize_prompt_label)
         self.summarize_prompt = QTextEdit()
-        self.summarize_prompt.setPlaceholderText("请为以下内容创建一个带有时间戳（mm:ss格式）的粗略摘要，不多于10个事件。请关注关键事件和重要时刻，并确保所有时间戳都采用分钟:秒钟格式。")
+        self.summarize_prompt.setPlaceholderText(_("summarize_prompt_placeholder"))
         self.summarize_layout.addWidget(self.summarize_prompt)
 
-        self.summarize_layout.addWidget(BodyLabel("📁 输入文件"))
+        self.summarize_input_label = BodyLabel(_("summarize_input_label"))
+        self.summarize_layout.addWidget(self.summarize_input_label)
         self.summarize_files_list = QTextEdit()
         self.summarize_files_list.setAcceptDrops(True)
         self._bind_drop_event(self.summarize_files_list)
-        self.summarize_files_list.setPlaceholderText("拖拽文件到方框内，点击运行即可。输出文件为输入文件名.summary.txt。")
+        self.summarize_files_list.setPlaceholderText(_("summarize_input_placeholder"))
         self.summarize_layout.addWidget(self.summarize_files_list)
 
-        self.run_summarize_button = QPushButton("🚀 运行")
+        self.run_summarize_button = QPushButton(_("summarize_run_btn"))
         self.run_summarize_button.clicked.connect(self.run_summarize)
         self.summarize_layout.addWidget(self.run_summarize_button)
 
-        self.addSubInterface(self.summarize_tab, FluentIcon.DEVELOPER_TOOLS, "总结工具", NavigationItemPosition.TOP)
+        self.addSubInterface(self.summarize_tab, FluentIcon.DEVELOPER_TOOLS, _("tab_summarize"), NavigationItemPosition.TOP)
 
     def run_worker(self):
         self.thread = QThread()
@@ -1772,11 +1854,11 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
 
     def show_model_selection_dialog(self, models):
         dialog = QDialog(self)
-        dialog.setWindowTitle("选择模型")
+        dialog.setWindowTitle(_("dialog_select_model_title"))
         dialog.setMinimumWidth(400)
         layout = QVBoxLayout(dialog)
 
-        label = QLabel("请选择要使用的模型：")
+        label = QLabel(_("dialog_select_model_label"))
         layout.addWidget(label)
 
         combo = QComboBox()
@@ -1784,8 +1866,8 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
         layout.addWidget(combo)
 
         btn_layout = QHBoxLayout()
-        ok_btn = QPushButton("确定")
-        cancel_btn = QPushButton("取消")
+        ok_btn = QPushButton(_("dialog_ok"))
+        cancel_btn = QPushButton(_("dialog_cancel"))
         btn_layout.addWidget(ok_btn)
         btn_layout.addWidget(cancel_btn)
         layout.addLayout(btn_layout)
@@ -1889,6 +1971,22 @@ class MainWorker(QObject):
         if hasattr(self, '_translation_pool') and self._translation_pool:
             self._translation_pool.stop()
 
+    def _check_auto_shutdown(self):
+        """检查是否需要自动关机"""
+        if hasattr(self.master, 'auto_shutdown_checkbox') and self.master.auto_shutdown_checkbox.isChecked():
+            self.status.emit(_("status_auto_shutdown"))
+            import platform
+            system = platform.system()
+            try:
+                if system == 'Darwin':  # macOS
+                    subprocess.Popen(['osascript', '-e', 'tell application "System Events" to shut down'])
+                elif system == 'Windows':
+                    subprocess.Popen(['shutdown', '/s', '/t', '0'])
+                else:  # Linux
+                    subprocess.Popen(['shutdown', '-h', 'now'])
+            except Exception as e:
+                self.status.emit(f"[ERROR] 自动关机失败: {e}")
+
     @error_handler
     def save_config(self):
         self._emit_status("[INFO] 正在读取配置...")
@@ -1911,6 +2009,9 @@ class MainWorker(QObject):
         enable_segment = self.master.enable_segment_checkbox.isChecked()
         segment_duration = self.master.segment_duration_spin.value()
         change_prompt_mode = self.master.change_prompt_mode.currentText() if hasattr(self.master, 'change_prompt_mode') else '不修改'
+        auto_shutdown = self.master.auto_shutdown_checkbox.isChecked() if hasattr(self.master, 'auto_shutdown_checkbox') else False
+        target_translation_lang = self.master.target_lang.currentData() if hasattr(self.master, 'target_lang') else 'zh-cn'
+        current_lang = get_language()
 
         # save GUI settings to YAML（不包含 API Key）
         gui_settings = {
@@ -1994,7 +2095,8 @@ class MainWorker(QObject):
         # Update language setting
         if 'common' not in cfg:
             cfg['common'] = {}
-        cfg['common']['language'] = f"zh-cn"
+        target_lang = self.master.target_lang.currentData() if hasattr(self.master, 'target_lang') else 'zh-cn'
+        cfg['common']['language'] = target_lang
 
         # Update backendSpecific configuration
         if 'backendSpecific' not in cfg:
@@ -2594,7 +2696,8 @@ class MainWorker(QObject):
         # 统一刷新翻译配置
         self.update_translation_config()
 
-        need_translate = translator != '不进行翻译' and language != 'zh'
+        target_lang = self.master.target_lang.currentData() if hasattr(self.master, 'target_lang') else 'zh-cn'
+        need_translate = translator != '不进行翻译' and not (language == 'zh' and target_lang in ('zh-cn', 'zh-tw'))
         if not need_translate:
             if translator == '不进行翻译':
                 self._emit_status("[INFO] 翻译器未选择，按单文件流程跳过翻译步骤...")
