@@ -713,6 +713,7 @@ class MainWindow(QMainWindow):
                 enable_segment = (lines[15].strip().lower() == 'true') if len(lines) > 15 else False
                 segment_duration = int(lines[16].strip()) if len(lines) > 16 else 10
                 change_prompt_mode = lines[17].strip() if len(lines) > 17 else '不修改'
+                auto_shutdown = (lines[18].strip().lower() == 'true') if len(lines) > 18 else False
 
                 if self.whisper_file: self.whisper_file.setCurrentText(whisper_file)
                 self.translator_group.setCurrentText(translator)
@@ -734,6 +735,8 @@ class MainWindow(QMainWindow):
                 self.segment_duration_spin.setValue(segment_duration)
                 if hasattr(self, 'change_prompt_mode') and change_prompt_mode:
                     self.change_prompt_mode.setCurrentText(change_prompt_mode)
+                if hasattr(self, 'auto_shutdown_checkbox'):
+                    self.auto_shutdown_checkbox.setChecked(auto_shutdown)
 
         if not self.output_dir_edit.text().strip():
             self.output_dir_edit.setText(self.default_output_dir())
@@ -1096,6 +1099,10 @@ VoiceTrans是一站式离线AI视频字幕生成和翻译软件，功能包括�
 
         # Add the button row layout to the input output layout
         self.input_output_layout.addLayout(button_layout)
+
+        # Auto shutdown checkbox
+        self.auto_shutdown_checkbox = QCheckBox("任务完成后自动关机")
+        self.input_output_layout.addWidget(self.auto_shutdown_checkbox)
         
         self.addSubInterface(self.input_output_tab, FluentIcon.HOME, "输入输出", NavigationItemPosition.TOP)
 
@@ -1555,6 +1562,22 @@ class MainWorker(QObject):
         if hasattr(self, '_translation_pool') and self._translation_pool:
             self._translation_pool.stop()
 
+    def _check_auto_shutdown(self):
+        """检查是否需要自动关机"""
+        if hasattr(self.master, 'auto_shutdown_checkbox') and self.master.auto_shutdown_checkbox.isChecked():
+            self.status.emit("[INFO] 任务完成，正在执行自动关机...")
+            import platform
+            system = platform.system()
+            try:
+                if system == 'Darwin':  # macOS
+                    subprocess.Popen(['osascript', '-e', 'tell application "System Events" to shut down'])
+                elif system == 'Windows':
+                    subprocess.Popen(['shutdown', '/s', '/t', '0'])
+                else:  # Linux
+                    subprocess.Popen(['shutdown', '-h', 'now'])
+            except Exception as e:
+                self.status.emit(f"[ERROR] 自动关机失败: {e}")
+
     @error_handler
     def save_config(self):
         self.status.emit("[INFO] 正在读取配置...")
@@ -1577,10 +1600,11 @@ class MainWorker(QObject):
         enable_segment = self.master.enable_segment_checkbox.isChecked()
         segment_duration = self.master.segment_duration_spin.value()
         change_prompt_mode = self.master.change_prompt_mode.currentText() if hasattr(self.master, 'change_prompt_mode') else '不修改'
+        auto_shutdown = self.master.auto_shutdown_checkbox.isChecked() if hasattr(self.master, 'auto_shutdown_checkbox') else False
 
         # save config
         with open('config.txt', 'w', encoding='utf-8') as f:
-            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n{self.master.max_concurrent_spin.value()}\n{enable_segment}\n{segment_duration}\n{change_prompt_mode}\n")
+            f.write(f"{whisper_file}\n{translator}\n{language}\n{gpt_token}\n{gpt_address}\n{gpt_model}\n{sakura_file}\n{sakura_mode}\n{proxy_address}\n{uvr_file}\n{output_format}\n{subtitle_font}\n{output_dir}\n{use_input_dir}\n{self.master.max_concurrent_spin.value()}\n{enable_segment}\n{segment_duration}\n{change_prompt_mode}\n{auto_shutdown}\n")
 
         # save whisper param
         with open('whisper/param.txt', 'w', encoding='utf-8') as f:
